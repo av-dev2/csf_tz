@@ -201,7 +201,7 @@ def receive_callback(*args, **kwargs):
     )
 
 
-def make_payment_entry(method="callback", **bankkwargs):
+def make_payment_entry(method="callback", **kwargs):
     for key, value in kwargs.items():
         nmb_doc = value
         doc_info = get_fee_info(nmb_doc.reference)

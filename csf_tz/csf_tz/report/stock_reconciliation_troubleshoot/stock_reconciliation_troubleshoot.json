@@ -1,22 +1,37 @@
 {
- "add_total_row": 0,
+ "add_total_row": 1,
  "columns": [],
  "creation": "2024-12-10 16:54:14.096744",
  "disable_prepared_report": 0,
  "disabled": 0,
  "docstatus": 0,
  "doctype": "Report",
- "filters": [],
+ "filters": [
+  {
+   "fieldname": "from_date",
+   "fieldtype": "Date",
+   "label": "From Date",
+   "mandatory": 1,
+   "wildcard_filter": 0
+  },
+  {
+   "fieldname": "to_date",
+   "fieldtype": "Date",
+   "label": "To Date",
+   "mandatory": 1,
+   "wildcard_filter": 0
+  }
+ ],
  "idx": 0,
  "is_standard": "Yes",
- "letter_head": "Nephro One",
- "modified": "2024-12-16 17:06:40.711881",
+ "letter_head": "",
+ "modified": "2024-12-30 12:52:41.522027",
  "modified_by": "Administrator",
  "module": "csf_tz",
  "name": "Stock Reconciliation troubleshoot",
  "owner": "Administrator",
  "prepared_report": 0,
- "query": "SELECT \n    sr.posting_date AS \"Posting Date:Date:\", \n    sr.posting_time AS \"Posting Time:Time:\",\n    GROUP_CONCAT(sr.name SEPARATOR ', ') AS \"Stock Reconciliations:Link/Stock Reconciliation:\",\n    sri.item_code AS \"Item:Link/Item:\",\n    sri.warehouse AS \"Warehouse::\",\n    sri.item_name AS \"Item Name::\",\n    GROUP_CONCAT(FORMAT(sri.qty, 0)) AS \"Qty Values:Data:\",\n    SUM(sri.amount_difference) AS \"Total Amount Difference:Currency:\"\nFROM \n    `tabStock Reconciliation Item` sri\nINNER JOIN \n    `tabStock Reconciliation` sr ON sri.parent = sr.name\nWHERE \n    sr.docstatus = 1\nGROUP BY \n   sri.warehouse, sri.item_code\nHAVING \n    COUNT(*) > 1;\n",
+ "query": "SELECT \n    sr.posting_date AS \"Posting Date:Date:\", \n    sr.posting_time AS \"Posting Time:Time:\",\n    GROUP_CONCAT(DISTINCT sr.name ORDER BY sr.name ASC SEPARATOR ', ') AS \"Stock Reconciliations:Link/Stock Reconciliation:\",\n    sri.item_code AS \"Item:Link/Item:\",\n    sri.item_name AS \"Item Name::\",\n    GROUP_CONCAT(FORMAT(sri.qty, 0)) AS \"Qty Values:Data:\",\n    sri.warehouse AS \"Warehouse:Link/Warehouse:\",\n    SUM(sri.amount_difference) AS \"Total Amount Difference:Currency:\"\nFROM \n    `tabStock Reconciliation Item` sri\nINNER JOIN \n    `tabStock Reconciliation` sr ON sri.parent = sr.name\nWHERE \n    sr.docstatus = 1 AND sr.posting_date >= %(from_date)s AND sr.posting_date <= %(to_date)s\nGROUP BY \n   sri.warehouse, sri.item_code\nHAVING \n    COUNT(*) > 1;\n",
  "ref_doctype": "Stock Reconciliation",
  "report_name": "Stock Reconciliation troubleshoot",
  "report_type": "Query Report",
@@ -25,16 +40,7 @@
    "role": "System Manager"
   },
   {
-   "role": "Laboratory User"
-  },
-  {
-   "role": "Healthcare Pharmacist"
-  },
-  {
    "role": "Stock Manager"
-  },
-  {
-   "role": "Nursing User"
   }
  ]
 }

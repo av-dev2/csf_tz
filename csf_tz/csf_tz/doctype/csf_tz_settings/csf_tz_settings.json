@@ -24,8 +24,6 @@
   "role_to_reopen_material_request",
   "sales_invoice_qty_settings_section",
   "override_sales_invoice_qty",
-  "trade_in_settings_section",
-  "enable_trade_in",
   "tab_stock_accounting",
   "stock_inventory_section",
   "is_manufacture",
@@ -309,18 +307,6 @@
    "fieldname": "override_sales_invoice_qty",
    "fieldtype": "Check",
    "label": "Override Sales Invoice Qty"
-  },
-  {
-   "fieldname": "trade_in_settings_section",
-   "fieldtype": "Section Break",
-   "label": "Trade In Settings"
-  },
-  {
-   "default": "0",
-   "description": "Enable this feature to handle trade-in items directly within Sales Invoices.",
-   "fieldname": "enable_trade_in",
-   "fieldtype": "Check",
-   "label": "Enable Trade In"
   },
   {
    "default": "0",

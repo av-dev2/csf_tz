@@ -50,7 +50,6 @@ doctype_js = {
 	],
 	"Supplier": "csf_tz/supplier.js",
 	"Stock Entry": "csf_tz/stock_entry.js",
-	"Account": "csf_tz/account.js",
 	"Warehouse": "csf_tz/warehouse.js",
 	"Company": "csf_tz/company.js",
 	"Stock Reconciliation": "csf_tz/stock_reconciliation.js",
@@ -183,10 +182,6 @@ doc_events = {
 	"Delivery Note": {
 		"on_submit": "csf_tz.custom_api.update_delivery_on_sales_invoice",
 		"before_cancel": "csf_tz.custom_api.update_delivery_on_sales_invoice",
-	},
-	"Account": {
-		"on_update": "csf_tz.custom_api.create_indirect_expense_item",
-		"after_insert": "csf_tz.custom_api.create_indirect_expense_item",
 	},
 	"Purchase Invoice": {
 		"on_submit": [

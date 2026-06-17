@@ -8,7 +8,15 @@ CUSTOM_FIELDS = (
     "Salary Slip-salary_slip_ot_component",
 )
 
+ORPHAN_DOCTYPES = (
+    "Salary Slip OT Component",
+    "Employee OT Component",
+)
+
 
 def execute():
     for field_name in CUSTOM_FIELDS:
         frappe.delete_doc_if_exists("Custom Field", field_name, force=True)
+
+    for doctype in ORPHAN_DOCTYPES:
+        frappe.delete_doc_if_exists("DocType", doctype, force=True)

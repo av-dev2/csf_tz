@@ -129,11 +129,28 @@ def get_data(filters):
     return data
 
 
+def get_filtered_warehouses(filters):
+    warehouse = filters.get("warehouse")
+    if not warehouse:
+        return None
+
+    if frappe.db.get_value("Warehouse", warehouse, "is_group"):
+        lft, rgt = frappe.db.get_value("Warehouse", warehouse, ["lft", "rgt"])
+        descendants = frappe.db.get_all(
+            "Warehouse",
+            {"lft": (">", lft), "rgt": ("<", rgt), "is_group": 0},
+            pluck="name",
+        )
+        return descendants or [warehouse]
+
+    return [warehouse]
+
+
 def get_quantity_sold(filters):
     SalesInvoice = frappe.qb.DocType("Sales Invoice")
     SalesInvoiceItem = frappe.qb.DocType("Sales Invoice Item")
 
-    rows = (
+    query = (
         frappe.qb.from_(SalesInvoiceItem)
         .join(SalesInvoice)
         .on(SalesInvoice.name == SalesInvoiceItem.parent)
@@ -144,8 +161,13 @@ def get_quantity_sold(filters):
         .where(SalesInvoice.docstatus == 1)
         .where(SalesInvoice.posting_date.between(filters.from_date, filters.to_date))
         .groupby(SalesInvoiceItem.item_code)
-        .run(as_dict=True)
     )
+
+    warehouses = get_filtered_warehouses(filters)
+    if warehouses is not None:
+        query = query.where(SalesInvoiceItem.warehouse.isin(warehouses))
+
+    rows = query.run(as_dict=True)
 
     return {row.item_code: row.qty_sold for row in rows}
 
@@ -163,8 +185,9 @@ def get_bin_snapshot(filters):
         .groupby(Bin.item_code)
     )
 
-    if filters.get("warehouse"):
-        query = query.where(Bin.warehouse == filters.warehouse)
+    warehouses = get_filtered_warehouses(filters)
+    if warehouses is not None:
+        query = query.where(Bin.warehouse.isin(warehouses))
 
     rows = query.run(as_dict=True)
 

@@ -181,9 +181,9 @@ def get_warehouse_condition(warehouse):
 def get_item_group_condition(item_group):
 	item_group_details = frappe.db.get_value("Item Group", item_group, ["lft", "rgt"], as_dict=1)
 	if item_group_details:
-		return "item.item_group in (select ig.name from `tabItem Group` ig \
-			where ig.lft >= %s and ig.rgt <= %s and item.item_group = ig.name)"%(item_group_details.lft,
-			item_group_details.rgt)
+		return "item_group in (select ig.name from `tabItem Group` ig \
+			where ig.lft >= %s and ig.rgt <= %s)"%(item_group_details.lft,
+				item_group_details.rgt)
 
 	return ''
 

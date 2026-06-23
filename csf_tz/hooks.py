@@ -340,9 +340,10 @@ scheduler_events = {
         "csf_tz.custom_api.make_stock_reconciliation_for_all_pending_material_request"
     ],
     "monthly": [
-        # "csf_tz.tasks.monthly",
-        "csf_tz.csf_tz.doctype.tz_insurance_cover_note.tz_insurance_cover_note.update_covernote_docs"
-    ],
+		# "csf_tz.tasks.monthly",
+		"csf_tz.csf_tz.doctype.tz_insurance_cover_note.tz_insurance_cover_note.update_covernote_docs",
+		"csf_tz.csf_tz.doctype.latra_licenses.latra_licenses.update_latra_records",
+	],
 }
 
 jinja = {"methods": ["csf_tz.custom_api.generate_qrcode"]}

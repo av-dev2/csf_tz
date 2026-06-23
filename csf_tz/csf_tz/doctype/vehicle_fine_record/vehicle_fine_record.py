@@ -28,7 +28,7 @@ class VehicleFineRecord(Document):
             if self.vehicle:
                 vehicle_name = frappe.get_value(
                     "Vehicle", {"number_plate": self.vehicle}, "name"
-                )
+                ) or frappe.get_value("Vehicle", {"license_plate": self.vehicle}, "name")
                 if vehicle_name:
                     self.vehicle_doc = vehicle_name
                 else:
@@ -42,7 +42,7 @@ class VehicleFineRecord(Document):
 
 def check_fine_all_vehicles(batch_size=20):
     plate_list = frappe.get_all(
-        "Vehicle", fields=["name", "number_plate"], limit_page_length=0
+        "Vehicle", fields=["name", "number_plate", "license_plate"], limit_page_length=0
     )
     all_fine_list = []
     total_vehicles = len(plate_list)
@@ -53,7 +53,7 @@ def check_fine_all_vehicles(batch_size=20):
             # Enqueue get_fine(number_plate=vehicle["number_plate"] or vehicle["name"])
             frappe.enqueue(
                 "csf_tz.csf_tz.doctype.vehicle_fine_record.vehicle_fine_record.get_fine",
-                number_plate=vehicle["number_plate"] or vehicle["name"],
+                number_plate=vehicle["number_plate"] or vehicle["license_plate"] or vehicle["name"],
             )
 
             fine_list = []
@@ -122,15 +122,19 @@ def get_fine(number_plate=None, reference=None):
         frappe.throw("Invalid response format from traffic system")
 
     data = result.get("pending_transactions", [])
+    vehicle_key = number_plate or reference
 
     if data:
-        print(f"Vehicle: {number_plate or reference} has no pending transactions")
-        return fine_list
+        fine_list = [fine.get("reference") for fine in data if fine.get("reference")]
+        if not fine_list:
+            return fine_list
+
+        filters = {"vehicle": vehicle_key, "status": ["!=", "PAID"], "reference": ["not in", fine_list]}
     else:
-        if frappe.db.exists("Vehicle Fine Record", payload):
-            doc = frappe.get_doc("Vehicle Fine Record", payload)
-            doc.status = "PAID"
-            doc.save()
+        filters = {"vehicle": vehicle_key, "status": ["!=", "PAID"]}
+
+    for record in frappe.get_all("Vehicle Fine Record", filters=filters, pluck="name"):
+        frappe.db.set_value("Vehicle Fine Record", record, "status", "PAID")
 
     frappe.db.commit()
     return fine_list

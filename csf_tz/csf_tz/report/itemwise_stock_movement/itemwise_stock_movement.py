@@ -1,189 +1,165 @@
 # Copyright (c) 2019, Aakvatech and contributors
 # For license information, please see license.txt
 
-from __future__ import unicode_literals
 import frappe
-from frappe import _
 import pandas as pd
+from erpnext.stock.report.stock_ledger.stock_ledger import get_item_group_condition
+from frappe import _
+from frappe.query_builder import Case, Criterion, Order
+from frappe.query_builder.functions import Sum
+from frappe.utils import getdate
+from pypika.analytics import RowNumber
+from pypika.terms import ExistsCriterion
+
 
 def execute(filters=None):
-	# frappe.msgprint(str(filters))
 	columns = get_columns()
-	data = []
 	items = get_items(filters)
+	if items == []:
+		return columns, []
 
-	# Get opening balances as first row in the sl_entries
-	sl_entries =  get_opening_balance_entries(filters, items)
-	# frappe.msgprint("sle entries are: " + str(sl_entries))
-	# Get rest of the stock ledgers
-	sl_entries += get_stock_ledger_entries(filters, items)
+	sle = frappe.qb.DocType("Stock Ledger Entry")
+	conditions = get_conditions(sle, filters, items)
 
-	# below is to try overcome issue of not getting column names in pivot_table 
+	sl_entries = get_opening_balance_entries(sle, filters, conditions)
+	sl_entries += get_stock_ledger_entries(sle, filters, conditions)
+
+	data = []
 	if sl_entries:
-		colnames = [key for key in sl_entries[0].keys()]
-		# frappe.msgprint("colnames are: " + str(colnames))
-		df = pd.DataFrame.from_records(sl_entries, columns=colnames)
-		# frappe.msgprint("dataframe columns are is: " + str(df.columns.tolist()))
 		pvt = pd.pivot_table(
-			df,
-			values='actual_qty',
-			index=['posting_date', 'Particulars'],
-			columns='item_code',
-			fill_value=0
+			pd.DataFrame.from_records(sl_entries),
+			values="actual_qty",
+			index=["posting_date", "Particulars"],
+			columns="item_code",
+			fill_value=0,
 		)
-		# frappe.msgprint(str(pvt))
-
 		data = pvt.reset_index().values.tolist()
-		# frappe.msgprint("Data is: " + str(data))
-
 		columns += pvt.columns.values.tolist()
 
 	return columns, data
 
+
 def get_columns():
-	columns = [
+	return [
 		{"label": _("Date"), "fieldname": "date", "fieldtype": "Date", "width": 95},
 		{"label": _("Particulars"), "fieldname": "Particulars", "width": 110},
 	]
 
-	return columns
 
-def get_stock_ledger_entries(filters, items):
-	item_conditions_sql = ''
+def get_stock_ledger_entries(sle, filters, conditions):
+	si = frappe.qb.DocType("Sales Invoice")
+	dn = frappe.qb.DocType("Delivery Note")
+
+	particulars = (
+		Case()
+		.when(sle.voucher_type == "Sales Invoice", si.customer)
+		.when(sle.voucher_type == "Delivery Note", dn.customer)
+		.else_(sle.voucher_type)
+	)
+
+	query = (
+		frappe.qb.from_(sle)
+		.left_join(si)
+		.on((sle.voucher_no == si.name) & (sle.company == si.company))
+		.left_join(dn)
+		.on((sle.voucher_no == dn.name) & (sle.company == dn.company))
+		.select(
+			sle.posting_date,
+			particulars.as_("Particulars"),
+			sle.item_code,
+			Sum(sle.actual_qty).as_("actual_qty"),
+		)
+		.where(sle.actual_qty != 0)
+		.where(sle.posting_date[filters.get("from_date") : filters.get("to_date")])
+		.where(Criterion.all(conditions))
+		.groupby(sle.posting_date, particulars, sle.item_code)
+		.orderby(sle.posting_date)
+	)
+
+	return query.run(as_dict=True)
+
+
+def get_opening_balance_entries(sle, filters, conditions):
+	"""Opening balance per item: qty_after_transaction of the last entry
+	before from_date in each warehouse, summed across warehouses."""
+	last_sle = (
+		frappe.qb.from_(sle)
+		.select(
+			sle.item_code,
+			sle.qty_after_transaction,
+			RowNumber()
+			.over(sle.item_code, sle.warehouse)
+			.orderby(sle.posting_datetime, sle.creation, order=Order.desc)
+			.as_("row_no"),
+		)
+		.where(sle.posting_date < filters.get("from_date"))
+		.where(Criterion.all(conditions))
+	).as_("last_sle")
+
+	query = (
+		frappe.qb.from_(last_sle)
+		.select(last_sle.item_code, Sum(last_sle.qty_after_transaction).as_("actual_qty"))
+		.where(last_sle.row_no == 1)
+		.groupby(last_sle.item_code)
+	)
+
+	entries = query.run(as_dict=True)
+
+	opening_date = getdate(filters.get("from_date"))
+	for entry in entries:
+		entry.posting_date = opening_date
+		entry.Particulars = ". Opening Balance"
+
+	return entries
+
+
+def get_conditions(sle, filters, items):
+	conditions = [sle.company == filters.get("company"), sle.is_cancelled == 0]
+
+	if filters.get("warehouse"):
+		warehouse = frappe.db.get_value(
+			"Warehouse", filters.get("warehouse"), ["lft", "rgt"], as_dict=True
+		)
+		if not warehouse:
+			frappe.throw(_("Warehouse {0} not found").format(filters.get("warehouse")))
+		wh = frappe.qb.DocType("Warehouse")
+		conditions.append(
+			ExistsCriterion(
+				frappe.qb.from_(wh)
+				.select(wh.name)
+				.where(
+					(wh.lft >= warehouse.lft)
+					& (wh.rgt <= warehouse.rgt)
+					& (sle.warehouse == wh.name)
+				)
+			)
+		)
+
 	if items:
-		item_conditions_sql = 'and sle.item_code in ({})'\
-			.format(', '.join(['"' + frappe.db.escape(i) + '"' for i in items]))
+		conditions.append(sle.item_code.isin(items))
 
-	return frappe.db.sql("""SELECT	sle.posting_date, 
-									CASE sle.voucher_type 
-										WHEN "Purchase Invoice" THEN "Purchase Invoice" 
-										WHEN "Purchase Receipt" THEN "Purchase Receipt" 
-										WHEN "Sales Invoice" THEN si.customer
-										WHEN "Delivery Note" THEN dn.customer
-										WHEN "Stock Entry" THEN "Stock Entry"
-										ELSE "Other"
-									END as "Particulars",
-									sle.item_code, 
-									sum(sle.actual_qty) as "actual_qty"
-							FROM	`tabStock Ledger Entry` sle 
-								LEFT OUTER JOIN `tabSales Invoice` si 
-												ON sle.voucher_no = si.name
-												AND sle.company = si.company
-								LEFT OUTER JOIN `tabDelivery Note` dn 
-												ON sle.voucher_no = dn.name
-												AND sle.company = dn.company
-							WHERE sle.actual_qty != 0
-									AND sle.company = %(company)s
-									AND sle.posting_date BETWEEN %(from_date)s AND %(to_date)s
-									{sle_conditions}
-									{item_conditions_sql}
-							GROUP BY sle.posting_date, `Particulars`, sle.item_code
-							ORDER BY sle.posting_date asc"""\
-		.format(
-			sle_conditions=get_sle_conditions(filters),
-			item_conditions_sql = item_conditions_sql
-		), filters, as_dict = 1)
+	return conditions
 
-def get_opening_balance_entries(filters, items):
-	item_conditions_sql = ''
-	if items:
-		item_conditions_sql = 'and sle.item_code in ({})'\
-			.format(', '.join(['"' + frappe.db.escape(i) + '"' for i in items]))
-
-	return frappe.db.sql("""SELECT	STR_TO_DATE(%(from_date)s, '%%Y-%%m-%%d') as posting_date, 
-									". Opening Balance" as "Particulars",
-									sle.item_code, 
-									sum(if(sle.actual_qty = 0, sle.qty_after_transaction, sle.actual_qty)) as "actual_qty"
-							FROM	`tabStock Ledger Entry` sle 
-								LEFT OUTER JOIN `tabSales Invoice` si 
-												ON sle.voucher_no = si.name
-												AND sle.company = si.company
-								LEFT OUTER JOIN `tabDelivery Note` dn 
-												ON sle.voucher_no = dn.name
-												AND sle.company = dn.company
-							WHERE sle.company = %(company)s
-									AND sle.posting_date < %(from_date)s
-									{sle_conditions}
-									{item_conditions_sql}
-							GROUP BY `Particulars`, sle.item_code"""\
-		.format(
-			sle_conditions=get_sle_conditions(filters),
-			item_conditions_sql = item_conditions_sql
-		), filters, as_dict = 1)
 
 def get_items(filters):
-	"""Get items based on filters."""
-	items = []
-	
-	# Case 1: Filter by specific item_code
+	"""Item codes to restrict the report to. None means no restriction;
+	an empty list means the item filters matched nothing."""
 	if filters.get("item_code"):
-		items = [filters.get("item_code")]
-	
-	# Case 2: Filter by brand or item_group
-	elif filters.get("brand") or filters.get("item_group"):
-		query = "SELECT name FROM `tabItem` WHERE "
-		conditions = []
-		
-		if filters.get("brand"):
-			conditions.append("brand = %(brand)s")
-		
-		if filters.get("item_group"):
-			item_group_condition = get_item_group_condition(filters.get("item_group"))
-			if item_group_condition:
-				conditions.append(item_group_condition)
-		
-		if conditions:
-			query += " AND ".join(conditions)
-			items = frappe.db.sql_list(query, filters)
-	
-	# Case 3: No filters, get all items
-	else:
-		items = frappe.db.sql_list("SELECT name FROM `tabItem`")
-	
-	return items
+		return [filters.get("item_code")]
 
-def get_sle_conditions(filters):
-	conditions = []
-	if filters.get("warehouse"):
-		warehouse_condition = get_warehouse_condition(filters.get("warehouse"))
-		if warehouse_condition:
-			conditions.append(warehouse_condition)
+	if not (filters.get("brand") or filters.get("item_group")):
+		return None
 
-	return "and {}".format(" and ".join(conditions)) if conditions else ""
+	item = frappe.qb.DocType("Item")
+	query = frappe.qb.from_(item).select(item.name)
 
-def get_opening_balance(filters, _columns, date, balance_type, item_code):
-	if not (item_code and filters.warehouse and date):
-		return
+	if filters.get("brand"):
+		query = query.where(item.brand == filters.get("brand"))
 
-	from erpnext.stock.stock_ledger import get_previous_sle
-	last_entry = get_previous_sle({
-		"item_code": item_code,
-		"warehouse_condition": get_warehouse_condition(filters.warehouse),
-		"posting_date": date,
-		"posting_time": "00:00:00"
-	})
-	row = {}
-	row["voucher_type"] = _(balance_type)
-	for dummy, v in ((9, 'actual_qty')):
-			row[v] = last_entry.get(v, 0)
+	if filters.get("item_group"):
+		condition = get_item_group_condition(filters.get("item_group"), item)
+		if condition is None:
+			frappe.throw(_("Item Group {0} not found").format(filters.get("item_group")))
+		query = query.where(condition)
 
-	return row
-
-def get_warehouse_condition(warehouse):
-	warehouse_details = frappe.db.get_value("Warehouse", warehouse, ["lft", "rgt"], as_dict=1)
-	if warehouse_details:
-		return " exists (select name from `tabWarehouse` wh \
-			where wh.lft >= %s and wh.rgt <= %s and warehouse = wh.name)"%(warehouse_details.lft,
-			warehouse_details.rgt)
-
-	return ''
-
-def get_item_group_condition(item_group):
-	item_group_details = frappe.db.get_value("Item Group", item_group, ["lft", "rgt"], as_dict=1)
-	if item_group_details:
-		return "item.item_group in (select ig.name from `tabItem Group` ig \
-			where ig.lft >= %s and ig.rgt <= %s and item.item_group = ig.name)"%(item_group_details.lft,
-			item_group_details.rgt)
-
-	return ''
-
+	return [row[0] for row in query.run()]

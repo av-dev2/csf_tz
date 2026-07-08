@@ -41,18 +41,6 @@ frappe.query_reports["Itemwise Stock Movement"] = {
 			"label": __("Brand"),
 			"fieldtype": "Link",
 			"options": "Brand",
-		},
-		{
-			"fieldname":"include_uom",
-			"label": __("Include UOM"),
-			"fieldtype": "Link",
-			"options": "UOM"
 		}
 	]
 }
-
-// $(function() {
-// 	$(wrapper).bind("show", function() {
-// 		frappe.query_report.load();
-// 	});
-// });

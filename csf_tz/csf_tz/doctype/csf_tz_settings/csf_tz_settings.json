@@ -20,7 +20,6 @@
   "column_break_3",
   "auto_pos_for_role",
   "is_manufacture",
-  "allow_delete_in_sql_command",
   "allow_batch_splitting",
   "item_qty_poppup_message",
   "validate_grand_total_vs_payment_amount_on_sales_invoice",
@@ -101,12 +100,6 @@
    "fieldname": "is_manufacture",
    "fieldtype": "Check",
    "label": "Make Manufacture Entry instead of Material Receipt"
-  },
-  {
-   "default": "0",
-   "fieldname": "allow_delete_in_sql_command",
-   "fieldtype": "Check",
-   "label": "Allow Delete in SQL Command"
   },
   {
    "fieldname": "sle_gle_reposting_start_date",
@@ -427,7 +420,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2025-12-22 17:32:01.784671",
+ "modified": "2026-07-10 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "CSF TZ",
  "name": "CSF TZ Settings",

@@ -89,13 +89,10 @@ def check_fine_all_vehicles(batch_size=20):
     Discover every vehicle-like record across all installed doctypes
     (ERPNext Vehicle, Fleet MS Truck, Fleet MS Trailers, and any future
     doctype that has a plate-like field), normalise the registration number,
-    and enqueue a background fine-check for each unique, valid plate.
-
-    Duplicate plates (same plate on multiple doctypes) are only checked once.
-    The mark-as-PAID logic runs inside get_fine — no separate job is needed.
+    and process each unique, valid plate inline in the scheduler run.
     """
     seen_plates = set()
-    enqueued = 0
+    processed = 0
 
     for vehicle in get_vehicle_like_records():
         plate = normalize_number_plate(vehicle.plate_number)
@@ -104,18 +101,13 @@ def check_fine_all_vehicles(batch_size=20):
         if plate in seen_plates:
             continue
         seen_plates.add(plate)
-
-        frappe.enqueue(
-            "csf_tz.csf_tz.doctype.vehicle_fine_record.vehicle_fine_record.get_fine",
-            number_plate=plate,
-            queue="long",
-        )
-        enqueued += 1
+        get_fine(number_plate=plate)
+        processed += 1
 
     frappe.logger().info(
-        f"Enqueued fine checks for {enqueued} unique vehicle-like records"
+        f"Processed fine checks for {processed} unique vehicle-like records"
     )
-    return {"message": f"Enqueued fine checks for {enqueued} unique vehicle-like records"}
+    return {"message": f"Processed fine checks for {processed} unique vehicle-like records"}
 
 
 @frappe.whitelist()

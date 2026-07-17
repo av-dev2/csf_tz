@@ -26,7 +26,7 @@ def update_covernote_docs():
 		for June: a routine will run on 00:00 am, June 1, 2022
 	"""
 	seen_plates = set()
-	enqueued = 0
+	processed = 0
 
 	for vehicle in get_vehicle_like_records():
 		plate = normalize_number_plate(vehicle.plate_number)
@@ -35,20 +35,15 @@ def update_covernote_docs():
 		if plate in seen_plates:
 			continue
 		seen_plates.add(plate)
+		fetch_and_update_covernote(plate)
+		processed += 1
 
-		frappe.enqueue(
-			"csf_tz.csf_tz.doctype.tz_insurance_cover_note.tz_insurance_cover_note.fetch_and_update_covernote",
-			plate_number=plate,
-			queue="long",
-		)
-		enqueued += 1
-
-	frappe.logger().info(f"[CoverNote] Enqueued covernote updates for {enqueued} vehicles")
-	return {"message": f"Enqueued covernote updates for {enqueued} vehicles"}
+	frappe.logger().info(f"[CoverNote] Processed covernote updates for {processed} vehicles")
+	return {"message": f"Processed covernote updates for {processed} vehicles"}
 
 def fetch_and_update_covernote(plate_number):
 	"""
-	Background job to fetch and update covernote for a specific vehicle plate.
+	Fetch and update covernote for a specific vehicle plate.
 	"""
 	req = get_covernote_details(plate_number)
 	try:

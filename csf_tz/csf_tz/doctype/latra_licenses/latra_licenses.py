@@ -74,10 +74,10 @@ class LatraLicenses(Document):
 def update_latra_records():
 	"""
 	Scheduler entry point. Discovers all vehicle-like records, deduplicates
-	the plates, and dispatches a background job for each unique plate.
+	the plates, and processes each unique plate inline in the scheduler run.
 	"""
 	seen_plates = set()
-	enqueued = 0
+	processed = 0
 	skipped = 0
 	invalid_plates = []
 
@@ -104,16 +104,11 @@ def update_latra_records():
 			continue
 
 		seen_plates.add(plate)
-
-		frappe.enqueue(
-			"csf_tz.csf_tz.doctype.latra_licenses.latra_licenses.fetch_and_update_latra_license",
-			plate_number=plate,
-			queue="long",
-		)
-		enqueued += 1
+		fetch_and_update_latra_license(plate)
+		processed += 1
 
 	frappe.logger().info(
-		f"[LATRA] Enqueued {enqueued} licenses, skipped {skipped}, "
+		f"[LATRA] Processed {processed} licenses, skipped {skipped}, "
 		f"invalid plates: {len(invalid_plates)} - {invalid_plates[:10]}"
 	)
 	try:
@@ -126,7 +121,7 @@ def update_latra_records():
 		)
 
 	return {
-		"message": f"Enqueued license updates for {enqueued} vehicles",
+		"message": f"Processed license updates for {processed} vehicles",
 		"skipped": skipped,
 		"invalid_plates": invalid_plates[:20],
 		"offences": offence_result,
@@ -194,8 +189,8 @@ def update_latra_offences():
 
 def fetch_and_update_latra_license(plate_number):
 	"""
-	Background job. Fetches the LATRA GraphQL response for the given plate
-	and upserts the results into Latra Licenses.
+	Fetch the LATRA GraphQL response for the given plate and upsert
+	the results into Latra Licenses.
 	"""
 	frappe.logger().info(f"[LATRA] Starting fetch for plate: {plate_number}")
 

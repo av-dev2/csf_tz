@@ -6,10 +6,6 @@ PLATE_FIELD_CANDIDATES = (
 	"plate_number",
 	"number_plate",
 	"registration_number",
-	"vehicle_number",
-	"truck_number",
-	"trailer_number",
-	"name",
 )
 
 
@@ -77,9 +73,7 @@ def get_vehicle_docname_by_plate(plate_number):
 
 	meta = frappe.get_meta("Vehicle")
 	for fieldname in PLATE_FIELD_CANDIDATES:
-		if fieldname == "name":
-			vehicle_name = frappe.db.exists("Vehicle", plate_number)
-		elif meta.has_field(fieldname):
+		if meta.has_field(fieldname):
 			vehicle_name = frappe.db.get_value("Vehicle", {fieldname: plate_number}, "name")
 		else:
 			vehicle_name = None

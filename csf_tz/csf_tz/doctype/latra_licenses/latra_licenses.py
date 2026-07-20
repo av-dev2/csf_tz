@@ -3,13 +3,17 @@
 
 from __future__ import unicode_literals
 
+import time
 from time import sleep
 
 import frappe
 import requests
+from frappe.utils import cint
 from frappe.model.document import Document
 
-from csf_tz.vehicle_authority import get_vehicle_like_records
+from csf_tz.vehicle_authority import (
+	get_unique_vehicle_plates,
+)
 from csf_tz.csf_tz.doctype.vehicle_fine_record.vehicle_fine_record import (
 	is_valid_number_plate,
 	normalize_number_plate,
@@ -19,6 +23,9 @@ LATRA_GQL_URL = "https://rrims.latra.go.tz:8086/graphql"
 LATRA_LOGIN_URL = "https://rrims.latra.go.tz:8086/user/login"
 LATRA_BASIC_AUTH = "Basic bGFsaXM6MTIzNDU2Nzg="
 TOKEN_EXPIRED = "TOKEN_EXPIRED"
+RUN_TIME_BUDGET_SECONDS = 240
+LATRA_TIMEOUT_SECONDS = 15
+LATRA_MAX_RETRIES = 1
 
 GQL_QUERY = """
 query findMyCurrentLicensesPageable($pageableParam: PageableParamInput){
@@ -71,238 +78,249 @@ class LatraLicenses(Document):
 
 
 @frappe.whitelist()
-def update_latra_records():
-	"""
-	Scheduler entry point. Discovers all vehicle-like records, deduplicates
-	the plates, and processes each unique plate inline in the scheduler run.
-	"""
-	seen_plates = set()
-	processed = 0
-	skipped = 0
-	invalid_plates = []
+def update_latra_records(force=0):
+	token = _get_token() or _refresh_token()
 
-	vehicles = list(get_vehicle_like_records())
-	frappe.logger().info(f"[LATRA] Found {len(vehicles)} total vehicle records")
+	if not token:
+		return {
+			"message": "LATRA license sync skipped because no token is available.",
+		}
 
-	for vehicle in vehicles:
-		plate = normalize_number_plate(vehicle.plate_number)
+	license_result = sync_all_latra_licenses(token)
+	if license_result == TOKEN_EXPIRED:
+		token = _refresh_token(token)
+		if not token:
+			return {
+				"message": "LATRA license sync stopped because token refresh failed.",
+			}
+		license_result = sync_all_latra_licenses(token)
 
-		if not plate:
-			frappe.logger().warning(f"[LATRA] Could not normalize plate: {vehicle.plate_number}")
-			invalid_plates.append(vehicle.plate_number)
-			skipped += 1
-			continue
+	if license_result == TOKEN_EXPIRED:
+		return {
+			"message": "LATRA license sync stopped due to auth failure.",
+		}
 
-		if not is_valid_number_plate(plate):
-			frappe.logger().warning(f"[LATRA] Invalid plate format: {plate}")
-			invalid_plates.append(plate)
-			skipped += 1
-			continue
+	if license_result == "RATE_LIMITED":
+		return {
+			"message": "LATRA license sync stopped due to upstream throttling.",
+		}
 
-		if plate in seen_plates:
-			skipped += 1
-			continue
+	frappe.db.commit()
 
-		seen_plates.add(plate)
-		fetch_and_update_latra_license(plate)
-		processed += 1
-
-	frappe.logger().info(
-		f"[LATRA] Processed {processed} licenses, skipped {skipped}, "
-		f"invalid plates: {len(invalid_plates)} - {invalid_plates[:10]}"
-	)
-	try:
-		offence_result = update_latra_offences()
-	except Exception:
-		offence_result = None
-		frappe.log_error(
-			title="LATRA: Offence Sync Failed",
-			message=frappe.get_traceback(),
-		)
-
+	offence_result = update_latra_offences(force=force)
+	_log_sync_summary(license_result, offence_result)
 	return {
-		"message": f"Processed license updates for {processed} vehicles",
-		"skipped": skipped,
-		"invalid_plates": invalid_plates[:20],
+		"licenses": license_result,
 		"offences": offence_result,
 	}
 
 
 @frappe.whitelist()
-def update_latra_offences():
-	plates = {
-		plate
-		for plate in (normalize_number_plate(v.plate_number) for v in get_vehicle_like_records())
-		if plate and is_valid_number_plate(plate)
-	}
+def update_latra_offences(force=0):
+	plates = get_unique_vehicle_plates(
+		normalize_number_plate=normalize_number_plate,
+		is_valid_number_plate=is_valid_number_plate,
+	)
+	processed = saved = skipped = matched = 0
+
+	if not plates:
+		frappe.db.commit()
+		return {
+			"message": "Processed LATRA offence updates for 0 vehicle(s)",
+			"processed": 0,
+			"saved": 0,
+			"skipped": 0,
+			"completed_cycle": True,
+		}
+
 	token = _get_token()
 	if not token:
-		frappe.log_error(title="LATRA: No Token", message="Set access_token in Latra Settings.")
-		return
+		token = _refresh_token()
+		if not token:
+			frappe.log_error(title="LATRA: No Token", message="Set access_token in Latra Settings.")
+			return {"message": "LATRA offence sync skipped because no token is available."}
 
-	data = _call_offences_graphql(token)
+	data = _fetch_all_offences(token)
 	if data == TOKEN_EXPIRED:
-		new_token = _refresh_token(token)
-		data = _call_offences_graphql(new_token) if new_token else None
+		token = _refresh_token(token)
+		data = _fetch_all_offences(token) if token else None
+	if data == "RATE_LIMITED":
+		return {"message": "LATRA offence sync stopped due to upstream throttling."}
 	if not data:
 		frappe.log_error(title="LATRA: Offence GraphQL Failed", message="Could not fetch LATRA offences.")
-		return
+		return {"message": "LATRA offence sync stopped due to upstream failure."}
 
-	saved = skipped = 0
-	for row in ((data.get("allMyClientOffencesPageable") or {}).get("content") or []):
+	rows_by_plate = {}
+	for row in data:
 		plate = normalize_number_plate(row.get("vehicleRegistrationNumber"))
-		if not plate or plate not in plates:
-			skipped += 1
+		if not plate:
 			continue
+		rows_by_plate.setdefault(plate, []).append(row)
 
-		offence = row.get("offence") or {}
-		location = row.get("offenceLocation") or {}
-		values = {
-			"mv_reg_number": plate,
-			"offender_name": row.get("offenderName") or "",
-			"offence_type": row.get("clientOffenceType") or "",
-			"status": row.get("paymentStatus") or "",
-			"offence": offence.get("name") or row.get("warningDescription") or "",
-			"offence_date": _parse_date(row.get("offenceDate")),
-			"location": location.get("name") or "",
-			"reference_number": row.get("offenceReferenceNumber") or row.get("uid") or "",
-			"amount": row.get("amount") or offence.get("compoundedAmount") or 0,
-		}
-		existing = frappe.db.get_value(
-			"Latra Offence",
-			{
-				"mv_reg_number": values["mv_reg_number"],
-				"reference_number": values["reference_number"],
-				"offence_date": values["offence_date"],
-				"offence": values["offence"],
-			},
-			"name",
-		)
-		if existing:
-			frappe.db.set_value("Latra Offence", existing, values)
-		else:
-			frappe.get_doc({"doctype": "Latra Offence", **values}).insert(ignore_permissions=True)
-		saved += 1
+	for plate in plates:
+		plate_rows = rows_by_plate.get(plate, [])
+		if plate_rows:
+			matched += 1
 
-	return {"saved": saved, "skipped": skipped}
-
-
-def fetch_and_update_latra_license(plate_number):
-	"""
-	Fetch the LATRA GraphQL response for the given plate and upsert
-	the results into Latra Licenses.
-	"""
-	frappe.logger().info(f"[LATRA] Starting fetch for plate: {plate_number}")
-
-	token = _get_token()
-	if not token:
-		frappe.log_error(
-			title="LATRA: No Token",
-			message="Set access_token in Latra Settings before running LATRA sync.",
-		)
-		return
-
-	data = _call_graphql(token, plate_number)
-	if data == TOKEN_EXPIRED:
-		frappe.logger().info(f"[LATRA] Token expired for {plate_number}, refreshing...")
-		new_token = _refresh_token(token)
-		if not new_token:
-			frappe.log_error(
-				title="LATRA: Token Refresh Failed",
-				message=f"Could not refresh token for {plate_number}",
+		for row in plate_rows:
+			offence = row.get("offence") or {}
+			location = row.get("offenceLocation") or {}
+			values = {
+				"mv_reg_number": plate,
+				"offender_name": row.get("offenderName") or "",
+				"offence_type": row.get("clientOffenceType") or "",
+				"status": row.get("paymentStatus") or "",
+				"offence": offence.get("name") or row.get("warningDescription") or "",
+				"offence_date": _parse_date(row.get("offenceDate")),
+				"location": location.get("name") or "",
+				"reference_number": row.get("offenceReferenceNumber") or row.get("uid") or "",
+				"amount": row.get("amount") or offence.get("compoundedAmount") or 0,
+			}
+			existing = frappe.db.get_value(
+				"Latra Offence",
+				{
+					"mv_reg_number": values["mv_reg_number"],
+					"reference_number": values["reference_number"],
+					"offence_date": values["offence_date"],
+					"offence": values["offence"],
+				},
+				"name",
 			)
-			return
-		data = _call_graphql(new_token, plate_number)
-		if data in (None, TOKEN_EXPIRED):
-			frappe.log_error(
-				title="LATRA: GraphQL Call Failed After Token Refresh",
-				message=f"Still failed for {plate_number}",
-			)
-			return
-	elif data is None:
-		frappe.log_error(
-			title="LATRA: GraphQL Call Failed",
-			message=f"Got None response for {plate_number}",
-		)
-		return
+			if existing:
+				frappe.db.set_value("Latra Offence", existing, values)
+			else:
+				frappe.get_doc({"doctype": "Latra Offence", **values}).insert(ignore_permissions=True)
+			saved += 1
 
-	licenses = (
-		(data.get("findMyCurrentLicensesPageable") or {}).get("content") or []
+		if plate not in rows_by_plate:
+			skipped += 1
+
+		processed += 1
+
+	frappe.db.commit()
+	return {
+		"message": (
+			f"LATRA returned {len(data)} offence record(s); "
+			f"matched {matched} local vehicle plate(s); "
+			f"processed {processed} vehicle(s)"
+		),
+		"processed": processed,
+		"saved": saved,
+		"skipped": skipped,
+		"matched": matched,
+		"fetched_offences": len(data),
+		"total_vehicles": len(plates),
+		"completed_cycle": True,
+	}
+def sync_all_latra_licenses(token):
+	plates = get_unique_vehicle_plates(
+		normalize_number_plate=normalize_number_plate,
+		is_valid_number_plate=is_valid_number_plate,
 	)
+	started_at = time.monotonic()
+	all_licenses = _fetch_all_licenses(token)
 
-	frappe.logger().info(f"[LATRA] Got {len(licenses)} licenses for {plate_number}")
+	if all_licenses in (TOKEN_EXPIRED, "RATE_LIMITED", None):
+		return all_licenses
 
-	if not licenses:
-		frappe.logger().warning(f"[LATRA] No licenses found in LATRA for {plate_number}")
-		return
-
-	matching_licenses = []
-	for lic in licenses:
+	licenses_by_plate = {}
+	for lic in all_licenses:
 		vehicle_reg = normalize_number_plate(
 			(lic.get("vehicle") or {}).get("vehicleRegistrationNumber")
 		)
-		license_status = (lic.get("licenseStatus") or "").strip().upper()
-		if vehicle_reg == plate_number and license_status == "ACTIVE":
-			matching_licenses.append(lic)
+		if not vehicle_reg:
+			continue
+		licenses_by_plate.setdefault(vehicle_reg, []).append(lic)
 
-	if not matching_licenses:
-		frappe.logger().warning(f"[LATRA] No ACTIVE license found for {plate_number}")
-		return
+	processed = saved = skipped = matched = 0
+	for plate in plates:
+		if processed and (time.monotonic() - started_at) >= RUN_TIME_BUDGET_SECONDS:
+			break
 
-	matching_licenses.sort(key=lambda d: str(d.get("validTo") or ""), reverse=True)
+		matching_licenses = licenses_by_plate.get(plate, [])
+		if not matching_licenses:
+			skipped += 1
+			processed += 1
+			continue
 
-	records_saved = 0
-	for lic in matching_licenses[:1]:
-		try:
-			license_number = lic.get("licenseNumber")
-			if not license_number:
-				frappe.logger().warning(f"[LATRA] No license number for {plate_number}")
-				continue
+		matching_licenses.sort(key=lambda d: str(d.get("validTo") or ""), reverse=True)
+		matched += 1
+		saved += _upsert_latra_license(plate, matching_licenses[0])
+		frappe.db.commit()
+		processed += 1
 
-			values = {
-				"vehicle": plate_number,
-				"license_number": license_number,
-				"license_status": lic.get("licenseStatus") or "",
-				"license_type": _get_license_type(lic),
-				"service_type": (lic.get("serviceType") or {}).get("name") or "",
-				"place_issued": _get_place_issued(lic),
-				"issue_date": _parse_date(lic.get("validFrom")),
-				"expire_date": _parse_date(lic.get("validTo")),
-			}
+	return {
+		"message": (
+			f"LATRA returned {len(all_licenses)} license record(s); "
+			f"matched {matched} local vehicle plate(s); "
+			f"processed {processed} vehicle(s)"
+		),
+		"processed": processed,
+		"saved": saved,
+		"skipped": skipped,
+		"matched": matched,
+		"fetched_licenses": len(all_licenses),
+		"total_vehicles": len(plates),
+		"completed_cycle": processed >= len(plates),
+	}
 
-			if frappe.db.exists("Latra Licenses", license_number):
-				frappe.db.set_value("Latra Licenses", license_number, values)
-				frappe.logger().info(
-					f"[LATRA] Updated license {license_number} for {plate_number}"
-				)
-				records_saved += 1
-			else:
-				try:
-					doc = frappe.get_doc({"doctype": "Latra Licenses", **values})
-					doc.insert(ignore_permissions=True)
-					frappe.logger().info(
-						f"[LATRA] Inserted license {license_number} for {plate_number}"
-					)
-					records_saved += 1
-				except frappe.exceptions.DuplicateEntryError:
-					frappe.logger().warning(
-						f"[LATRA] Duplicate entry for {license_number}"
-					)
-				except Exception:
-					frappe.log_error(
-						title=f"LATRA: Error saving license {license_number} for {plate_number}",
-						message=frappe.get_traceback(),
-					)
 
-		except Exception:
-			frappe.log_error(
-				title=f"LATRA: Error processing license for {plate_number}",
-				message=frappe.get_traceback(),
-			)
+def _upsert_latra_license(plate_number, lic):
+	try:
+		license_number = lic.get("licenseNumber")
+		if not license_number:
+			frappe.logger().warning(f"[LATRA] No license number for {plate_number}")
+			return 0
 
-	frappe.logger().info(
-		f"[LATRA] Completed for {plate_number}: {records_saved} records saved"
-	)
+		values = {
+			"vehicle": plate_number,
+			"license_number": license_number,
+			"license_status": lic.get("licenseStatus") or "",
+			"license_type": _get_license_type(lic),
+			"service_type": (lic.get("serviceType") or {}).get("name") or "",
+			"place_issued": _get_place_issued(lic),
+			"issue_date": _parse_date(lic.get("validFrom")),
+			"expire_date": _parse_date(lic.get("validTo")),
+		}
+
+		if frappe.db.exists("Latra Licenses", license_number):
+			frappe.db.set_value("Latra Licenses", license_number, values)
+		else:
+			frappe.get_doc({"doctype": "Latra Licenses", **values}).insert(ignore_permissions=True)
+		return 1
+
+	except frappe.exceptions.DuplicateEntryError:
+		frappe.logger().warning(f"[LATRA] Duplicate entry for {lic.get('licenseNumber')}")
+		return 0
+	except Exception:
+		frappe.log_error(
+			title=f"LATRA: Error saving license for {plate_number}",
+			message=frappe.get_traceback(),
+		)
+		return 0
+
+
+def _log_sync_summary(license_result, offence_result):
+	try:
+		license_message = (
+			license_result.get("message")
+			if isinstance(license_result, dict)
+			else str(license_result)
+		)
+		offence_message = (
+			offence_result.get("message")
+			if isinstance(offence_result, dict)
+			else str(offence_result)
+		)
+		frappe.log_error(
+			title="LATRA Sync Summary",
+			message=f"Licenses: {license_message}\nOffences: {offence_message}",
+		)
+	except Exception:
+		frappe.log_error(
+			title="LATRA: Failed to write sync summary",
+			message=frappe.get_traceback(),
+		)
 
 
 def _get_token():
@@ -417,14 +435,45 @@ def _refresh_token_locked():
 def _token_cache_key():
 	return f"{frappe.local.site}:latra_access_token"
 
+def _fetch_all_offences(token):
+	page_size = 500
+	page_index = 0
+	all_rows = []
 
-def _call_offences_graphql(token):
+	while True:
+		result = _call_offences_graphql_page(token, first=page_index, size=page_size)
+		if result in (TOKEN_EXPIRED, "RATE_LIMITED", None):
+			return result
+
+		page = (result.get("allMyClientOffencesPageable") or {})
+		content = page.get("content") or []
+		total_elements = cint(page.get("totalElements") or 0)
+
+		if not content:
+			break
+
+		all_rows.extend(content)
+		if len(content) < page_size:
+			break
+
+		page_index += 1
+
+		if total_elements and len(all_rows) >= total_elements:
+			break
+
+	if total_elements and total_elements > page_size:
+		frappe.logger().info(f"[LATRA] Fetched {len(all_rows)} offences across paginated results")
+
+	return all_rows
+
+
+def _call_offences_graphql_page(token, first=0, size=500):
 	payload = {
 		"operationName": "allMyClientOffencesPageable",
 		"variables": {
 			"pageableParam": {
-				"first": 0,
-				"size": 500,
+				"first": first,
+				"size": size,
 				"sortBy": "id",
 				"sortDirection": "DESC",
 				"searchFields": [],
@@ -432,40 +481,110 @@ def _call_offences_graphql(token):
 		},
 		"query": OFFENCE_GQL_QUERY,
 	}
-	response = requests.post(
-		LATRA_GQL_URL,
-		json=payload,
-		headers={
-			"Authorization": f"Bearer {token}",
-			"Accept": "application/json",
-			"Content-Type": "application/json",
-		},
-		timeout=60,
-	)
-	if response.status_code == 401:
-		return TOKEN_EXPIRED
-	response.raise_for_status()
-	result = response.json()
-	if result.get("errors"):
+	response = None
+
+	for attempt in range(LATRA_MAX_RETRIES):
+		try:
+			if attempt > 0:
+				sleep(5 * attempt)
+
+			response = requests.post(
+				LATRA_GQL_URL,
+				json=payload,
+				headers={
+					"Authorization": f"Bearer {token}",
+					"Accept": "application/json",
+					"Content-Type": "application/json",
+				},
+				timeout=LATRA_TIMEOUT_SECONDS,
+			)
+			if response.status_code == 401:
+				return TOKEN_EXPIRED
+			if response.status_code == 429:
+				return "RATE_LIMITED"
+			response.raise_for_status()
+			break
+
+		except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+			if attempt < LATRA_MAX_RETRIES - 1:
+				continue
+			frappe.log_error(
+				title="LATRA Offence Connection Error",
+				message=f"Page {first} size {size}: {str(e)}",
+			)
+			return None
+
+		except requests.exceptions.HTTPError:
+			status = response.status_code if response is not None else 0
+			if status in (408,) or status >= 500:
+				if attempt < LATRA_MAX_RETRIES - 1:
+					continue
+				frappe.log_error(
+					title="LATRA Offence HTTP Error",
+					message=f"HTTP {status} on page {first}: {response.text[:500] if response else ''}",
+				)
+				return None
+			frappe.log_error(
+				title="LATRA Offence API Error",
+				message=f"HTTP {status} on page {first}: {response.text[:500] if response else ''}",
+			)
+			return None
+
+		except requests.exceptions.RequestException as e:
+			frappe.log_error(
+				title="LATRA Offence Request Error",
+				message=str(e),
+			)
+			return None
+
+	if response is None:
+		return None
+
+	try:
+		result = response.json()
+		if result.get("errors"):
+			frappe.log_error(
+				title="LATRA Offence GraphQL Error",
+				message=frappe.as_json(result.get("errors"))[:2000],
+			)
+			return None
+		return result.get("data")
+	except Exception:
 		frappe.log_error(
-			title="LATRA Offence GraphQL Error",
-			message=frappe.as_json(result.get("errors"))[:2000],
+			title="LATRA Offence Invalid JSON",
+			message=f"Non-JSON response on page {first}: {response.text[:500] if response else 'No response'}",
 		)
 		return None
-	return result.get("data")
+def _fetch_all_licenses(token):
+	page_size = 200
+	page_index = 0
+	all_licenses = []
+
+	while True:
+		result = _call_license_page(token, first=page_index, size=page_size)
+		if result in (TOKEN_EXPIRED, "RATE_LIMITED", None):
+			return result
+
+		content = ((result.get("findMyCurrentLicensesPageable") or {}).get("content") or [])
+		if not content:
+			break
+
+		all_licenses.extend(content)
+		if len(content) < page_size:
+			break
+
+		page_index += 1
+
+	return all_licenses
 
 
-def _call_graphql(token, plate_number):
-	"""
-	POST to the LATRA GraphQL endpoint. Returns the parsed `data` dict on
-	success, TOKEN_EXPIRED on a 401, or None on any other failure.
-	"""
+def _call_license_page(token, first=0, size=200):
 	payload = {
 		"operationName": "findMyCurrentLicensesPageable",
 		"variables": {
 			"pageableParam": {
-				"first": 0,
-				"size": 200,
+				"first": first,
+				"size": size,
 				"sortBy": "id",
 				"sortDirection": "DESC",
 				"searchFields": [],
@@ -479,86 +598,65 @@ def _call_graphql(token, plate_number):
 		"Content-Type": "application/json",
 	}
 
-	max_retries = 3
+	max_retries = LATRA_MAX_RETRIES
+	timeout = LATRA_TIMEOUT_SECONDS
 	response = None
 
 	for attempt in range(max_retries):
 		try:
 			if attempt > 0:
-				frappe.logger().info(f"[LATRA] Retry {attempt}/{max_retries-1} for {plate_number}")
 				sleep(5 * attempt)
 
 			response = requests.post(
-				LATRA_GQL_URL, json=payload, headers=headers, timeout=30
+				LATRA_GQL_URL, json=payload, headers=headers, timeout=timeout
 			)
 
 			if response.status_code == 401:
-				frappe.logger().warning(f"[LATRA] 401 Unauthorized for {plate_number}")
 				return TOKEN_EXPIRED
+			if response.status_code == 429:
+				return "RATE_LIMITED"
 
 			response.raise_for_status()
-			frappe.logger().debug(f"[LATRA] GraphQL success for {plate_number}")
 			break
 
-		except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+		except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
 			if attempt < max_retries - 1:
-				frappe.logger().warning(
-					f"[LATRA] Connection error (attempt {attempt+1}/{max_retries}): {str(e)}"
-				)
 				continue
-			frappe.logger().error(
-				f"[LATRA] Connection timeout for {plate_number} after {max_retries} retries: {str(e)}"
-			)
 			return None
 
 		except requests.exceptions.HTTPError:
 			status = response.status_code if response is not None else 0
-			if status in (408, 429) or status >= 500:
+			if status in (408,) or status >= 500:
 				if attempt < max_retries - 1:
-					frappe.logger().warning(
-						f"[LATRA] HTTP {status} (attempt {attempt+1}/{max_retries}), will retry"
-					)
 					continue
-				frappe.logger().error(
-					f"[LATRA] HTTP {status} for {plate_number} after {max_retries} retries"
-				)
 				return None
-			else:
-				response_text = response.text[:500] if response else ""
-				frappe.log_error(
-					title="LATRA API Error",
-					message=f"HTTP {status} for {plate_number}: {response_text}",
-				)
-				return None
+			frappe.log_error(
+				title="LATRA API Error",
+				message=f"HTTP {status}: {response.text[:500] if response else ''}",
+			)
+			return None
 
 		except requests.exceptions.RequestException as e:
 			frappe.log_error(title="LATRA API Error", message=str(e))
 			return None
 
 	if response is None:
-		frappe.log_error(
-			title="LATRA: No Response",
-			message=f"No response for {plate_number}",
-		)
 		return None
 
 	try:
 		result = response.json()
-		data = result.get("data")
-
 		errors = result.get("errors")
 		if errors:
 			frappe.log_error(
 				title="LATRA GraphQL Error",
-				message=f"GraphQL errors for {plate_number}: {errors}",
+				message=frappe.as_json(errors)[:2000],
 			)
 			return None
-
-		return data
+		return result.get("data")
 	except Exception:
 		frappe.log_error(
 			title="LATRA API: Invalid JSON",
-			message=f"Non-JSON response for {plate_number}: {response.text[:500] if response else 'No response'}",
+			message=f"Non-JSON response: {response.text[:500] if response else 'No response'}",
 		)
 		return None
 

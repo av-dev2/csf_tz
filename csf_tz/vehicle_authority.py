@@ -80,3 +80,23 @@ def get_vehicle_docname_by_plate(plate_number):
 
 		if vehicle_name:
 			return vehicle_name
+
+
+def get_unique_vehicle_plates(normalize_number_plate=None, is_valid_number_plate=None):
+	plates = {}
+
+	for record in get_vehicle_like_records():
+		plate = record.plate_number
+		if normalize_number_plate:
+			plate = normalize_number_plate(plate)
+
+		if not plate:
+			continue
+
+		if is_valid_number_plate and not is_valid_number_plate(plate):
+			continue
+
+		if plate not in plates:
+			plates[plate] = plate
+
+	return sorted(plates)

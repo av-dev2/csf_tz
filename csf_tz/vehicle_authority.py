@@ -1,6 +1,28 @@
 import frappe
 
 
+AUTHORITY_REFERENCE_TYPES = (
+	"LATRA License",
+	"LATRA Offence",
+	"TIRA",
+	"Vehicle Fine",
+)
+
+AUTHORITY_ENABLE_FIELD_MAP = {
+	"LATRA License": "enable_latra_license_notifications",
+	"LATRA Offence": "enable_latra_offence_notifications",
+	"TIRA": "enable_tira_notifications",
+	"Vehicle Fine": "enable_vehicle_fine_notifications",
+}
+
+AUTHORITY_EVENT_ENABLE_FIELD_MAP = {
+	("LATRA Offence", "new"): "latra_offence_notify_on_new",
+	("LATRA Offence", "status_change"): "latra_offence_notify_on_status_change",
+	("Vehicle Fine", "new"): "vehicle_fine_notify_on_new",
+	("Vehicle Fine", "status_change"): "vehicle_fine_notify_on_status_change",
+}
+
+
 PLATE_FIELD_CANDIDATES = (
 	"license_plate",
 	"plate_number",
@@ -100,3 +122,76 @@ def get_unique_vehicle_plates(normalize_number_plate=None, is_valid_number_plate
 			plates[plate] = plate
 
 	return sorted(plates)
+
+
+def get_authority_notification_roles(reference_type):
+	if reference_type not in AUTHORITY_REFERENCE_TYPES:
+		return []
+
+	try:
+		settings = frappe.get_single("CSF TZ Settings")
+	except Exception:
+		return []
+
+	return [
+		row.role
+		for row in (settings.get("authority_notification_roles") or [])
+		if row.reference_type == reference_type and row.role
+	]
+
+
+def get_authority_notification_recipients(reference_type):
+	recipients = {}
+
+	for role in get_authority_notification_roles(reference_type):
+		role_users = frappe.get_all(
+			"Has Role",
+			filters={"role": role, "parenttype": "User"},
+			fields=["parent"],
+			limit_page_length=0,
+		)
+		for row in role_users:
+			user = frappe.db.get_value(
+				"User",
+				row.parent,
+				["email", "enabled", "user_type"],
+				as_dict=True,
+			)
+			if not user or not user.enabled or user.user_type == "Website User":
+				continue
+			email = (user.email or "").strip()
+			if email:
+				recipients[email] = email
+
+	return sorted(recipients)
+
+
+def is_authority_notification_enabled(reference_type):
+	fieldname = AUTHORITY_ENABLE_FIELD_MAP.get(reference_type)
+	if not fieldname:
+		return False
+	return bool(frappe.db.get_single_value("CSF TZ Settings", fieldname))
+
+
+def is_authority_notification_event_enabled(reference_type, event_type):
+	fieldname = AUTHORITY_EVENT_ENABLE_FIELD_MAP.get((reference_type, event_type))
+	if not fieldname:
+		return is_authority_notification_enabled(reference_type)
+	return bool(frappe.db.get_single_value("CSF TZ Settings", fieldname))
+
+
+def send_authority_notification(reference_type, subject, message, now=True):
+	if not is_authority_notification_enabled(reference_type):
+		return {"sent": False, "reason": "disabled"}
+
+	recipients = get_authority_notification_recipients(reference_type)
+	if not recipients:
+		return {"sent": False, "reason": "no_recipients"}
+
+	frappe.sendmail(
+		recipients=recipients,
+		subject=subject,
+		message=message,
+		now=now,
+	)
+	return {"sent": True, "reason": "sent", "recipients": recipients}

@@ -273,8 +273,8 @@ scheduler_events = {
 	# 	"csf_tz.tasks.all"
 	# ],
 	"cron": {
-		"0 */2 * * *": [
-			"csf_tz.csf_tz.doctype.vehicle_fine_record.vehicle_fine_record.check_fine_all_vehicles",
+		"* * * * *": [
+			"csf_tz.csf_tz.doctype.vehicle_sync_task.processor.run_vehicle_batch",
 		],
 		"*/15 * * * *": [
 			"csf_tz.csftz_hooks.items_revaluation.process_incorrect_balance_qty",
@@ -302,6 +302,7 @@ scheduler_events = {
 		"csf_tz.bank_api.reconciliation",
 		"csf_tz.csftz_hooks.additional_salary.generate_additional_salary_records",
 		"csf_tz.csftz_hooks.exchange_calculations.update_pending_transactions",
+		"csf_tz.csf_tz.doctype.vehicle_sync_task.processor.seed_vehicle_sync_queue",
 	],
 	# "hourly": [
 	# 	"csf_tz.tasks.hourly"

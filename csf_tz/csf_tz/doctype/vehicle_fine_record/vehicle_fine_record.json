@@ -17,7 +17,9 @@
   "charge",
   "penalty",
   "total",
-  "location"
+  "location",
+  "authority_notified_on_new",
+  "authority_last_notified_status"
  ],
  "fields": [
   {
@@ -107,6 +109,20 @@
    "in_standard_filter": 1,
    "label": "VEHICLE DOC",
    "options": "Vehicle",
+   "read_only": 1
+  },
+  {
+   "fieldname": "authority_notified_on_new",
+   "fieldtype": "Datetime",
+   "hidden": 1,
+   "label": "Authority Notified On New",
+   "read_only": 1
+  },
+  {
+   "fieldname": "authority_last_notified_status",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Authority Last Notified Status",
    "read_only": 1
   }
  ],

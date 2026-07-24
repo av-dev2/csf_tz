@@ -11,9 +11,15 @@ import hashlib
 import json
 import requests
 from csf_tz.custom_api import print_out
-from csf_tz.vehicle_authority import get_vehicle_docname_by_plate, get_vehicle_like_records
+from csf_tz.vehicle_authority import (
+    get_vehicle_docname_by_plate,
+    get_vehicle_like_records,
+    is_authority_notification_event_enabled,
+    send_authority_notification,
+)
 import re
 from time import sleep
+from frappe.utils import now_datetime
 from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
@@ -110,6 +116,200 @@ def check_fine_all_vehicles(batch_size=20):
     return {"message": f"Processed fine checks for {processed} unique vehicle-like records"}
 
 
+def sync_vehicle_fines(number_plate):
+    number_plate = normalize_number_plate(number_plate)
+
+    if not number_plate:
+        return {
+            "status": "invalid",
+            "message": "Missing number plate",
+            "fine_list": [],
+        }
+
+    if not is_valid_number_plate(number_plate):
+        return {
+            "status": "invalid",
+            "message": f"Skipping invalid plate: {number_plate}",
+            "fine_list": [],
+        }
+
+    url = "https://tms.tpf.go.tz/api/OffenceCheck"
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "*/*",
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
+        "Origin": "https://tms.tpf.go.tz",
+        "Referer": "https://tms.tpf.go.tz/",
+        "Connection": "keep-alive",
+    }
+    payload = {"vehicle": number_plate}
+
+    max_retries = 3
+    response = None
+
+    for attempt in range(max_retries):
+        try:
+            if attempt > 0:
+                sleep(5 * attempt)
+
+            response = requests.post(url, json=payload, headers=headers, timeout=30)
+            if response.status_code == 429:
+                return {
+                    "status": "rate_limited",
+                    "message": f"TPF rate limited {number_plate}",
+                    "fine_list": [],
+                }
+            response.raise_for_status()
+            break
+
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as exc:
+            if attempt < max_retries - 1:
+                continue
+            frappe.logger().warning(
+                f"[VehicleFine] Connection timeout for {number_plate} "
+                f"after {max_retries} retries"
+            )
+            return {
+                "status": "retryable_error",
+                "message": str(exc),
+                "fine_list": [],
+            }
+
+        except requests.exceptions.HTTPError:
+            status = response.status_code if response is not None else 0
+            if status in (408,) or status >= 500:
+                if attempt < max_retries - 1:
+                    continue
+                frappe.logger().warning(
+                    f"[VehicleFine] HTTP {status} for {number_plate} "
+                    f"after {max_retries} retries"
+                )
+                return {
+                    "status": "retryable_error",
+                    "message": f"HTTP {status}",
+                    "fine_list": [],
+                }
+
+            frappe.log_error(
+                title="TPF API Error",
+                message=(
+                    f"HTTP {status} for {number_plate}: "
+                    f"{response.text[:500] if response is not None else ''}"
+                ),
+            )
+            return {
+                "status": "error",
+                "message": f"HTTP {status}",
+                "fine_list": [],
+            }
+
+        except requests.exceptions.RequestException as exc:
+            frappe.log_error(title="TPF API Error", message=str(exc))
+            return {
+                "status": "error",
+                "message": str(exc),
+                "fine_list": [],
+            }
+
+    if response is None:
+        return {
+            "status": "retryable_error",
+            "message": "No response from TPF",
+            "fine_list": [],
+        }
+
+    try:
+        result = response.json()
+        result = decode_tpf_response(result)
+    except Exception:
+        frappe.log_error(
+            title="TPF API: Invalid JSON",
+            message=(
+                f"Non-JSON response for {number_plate}: "
+                f"{response.text[:500]}"
+            ),
+        )
+        return {
+            "status": "error",
+            "message": "Invalid JSON response",
+            "fine_list": [],
+        }
+
+    data = result.get("pending_transactions", [])
+    fine_list = []
+
+    if data:
+        fine_list = [fine.get("reference") for fine in data if fine.get("reference")]
+        if not fine_list:
+            return {"status": "success", "message": "No fine references", "fine_list": fine_list}
+
+        stale_filters = {
+            "vehicle": number_plate,
+            "status": ["!=", "PAID"],
+            "reference": ["not in", fine_list],
+        }
+        for record in frappe.get_all(
+            "Vehicle Fine Record", filters=stale_filters, pluck="name"
+        ):
+            old_status = frappe.db.get_value("Vehicle Fine Record", record, "status")
+            frappe.db.set_value("Vehicle Fine Record", record, "status", "PAID")
+            _notify_vehicle_fine_status_change(record, number_plate, old_status, "PAID")
+
+        existing_refs = frappe.get_all(
+            "Vehicle Fine Record",
+            filters={"vehicle": number_plate, "reference": ["in", fine_list]},
+            pluck="reference",
+        )
+        for fine in data:
+            fine_ref = fine.get("reference")
+            if not fine_ref or fine_ref in existing_refs:
+                continue
+            charge = fine.get("charge") or fine.get("amount")
+            penalty = fine.get("penalty")
+            try:
+                doc = frappe.get_doc(
+                    {
+                        "doctype": "Vehicle Fine Record",
+                        "vehicle": number_plate,
+                        "reference": fine_ref,
+                        "status": fine.get("status") or "PENDING",
+                        "licence": fine.get("licence"),
+                        "location": fine.get("location"),
+                        "officer": fine.get("officer"),
+                        "charge": charge,
+                        "penalty": penalty,
+                        "total": fine.get("total") or (flt(charge) + flt(penalty)),
+                        "offence": fine.get("offence"),
+                        "issued_date": fine.get("issued_date") or fine.get("date"),
+                    }
+                )
+                doc.insert(ignore_permissions=True)
+                _notify_vehicle_fine_new(doc)
+            except frappe.exceptions.DuplicateEntryError:
+                pass
+            except Exception:
+                frappe.log_error(
+                    title=f"Error creating fine record for {number_plate}",
+                    message=frappe.get_traceback(),
+                )
+    else:
+        for record in frappe.get_all(
+            "Vehicle Fine Record",
+            filters={"vehicle": number_plate, "status": ["!=", "PAID"]},
+            pluck="name",
+        ):
+            old_status = frappe.db.get_value("Vehicle Fine Record", record, "status")
+            frappe.db.set_value("Vehicle Fine Record", record, "status", "PAID")
+            _notify_vehicle_fine_status_change(record, number_plate, old_status, "PAID")
+
+    frappe.db.commit()
+    return {
+        "status": "success",
+        "message": f"Processed fine sync for {number_plate}",
+        "fine_list": fine_list,
+    }
+
+
 @frappe.whitelist()
 def get_fine(number_plate):
     """
@@ -126,155 +326,50 @@ def get_fine(number_plate):
     Returns a list of fine reference strings that are currently pending
     according to the TPF API, or [] on any error.
     """
-    number_plate = normalize_number_plate(number_plate)
+    result = sync_vehicle_fines(number_plate)
+    return result.get("fine_list", [])
 
-    if not number_plate:
-        frappe.log_error(
-            title="get_fine: missing number plate",
-            message="get_fine was called with an empty or None number plate",
-        )
-        return []
 
-    if not is_valid_number_plate(number_plate):
-        frappe.log_error(
-            title="get_fine: invalid number plate",
-            message=f"Skipping invalid plate: {number_plate}",
-        )
-        return []
+def _notify_vehicle_fine_new(doc):
+    if not is_authority_notification_event_enabled("Vehicle Fine", "new"):
+        return
 
-    url = "https://tms.tpf.go.tz/api/OffenceCheck"
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "*/*",
-        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
-        "Origin": "https://tms.tpf.go.tz",
-        "Referer": "https://tms.tpf.go.tz/",
-        "Connection": "keep-alive",
-    }
-    payload = {"vehicle": number_plate}
-
-    max_retries = 3
-    response = None  
-
-    for attempt in range(max_retries):
-        try:
-            if attempt > 0:
-                sleep(5 * attempt)
-
-            response = requests.post(url, json=payload, headers=headers, timeout=30)
-            response.raise_for_status()
-            break 
-
-        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
-            if attempt < max_retries - 1:
-                continue
-            frappe.logger().warning(
-                f"[VehicleFine] Connection timeout for {number_plate} "
-                f"after {max_retries} retries"
-            )
-            return []
-
-        except requests.exceptions.HTTPError:
-            status = response.status_code if response is not None else 0
-            if status in (408, 429) or status >= 500:
-                if attempt < max_retries - 1:
-                    continue
-                frappe.logger().warning(
-                    f"[VehicleFine] HTTP {status} for {number_plate} "
-                    f"after {max_retries} retries"
-                )
-                return []
-            else:
-                frappe.log_error(
-                    title="TPF API Error",
-                    message=(
-                        f"HTTP {status} for {number_plate}: "
-                        f"{response.text[:500] if response is not None else ''}"
-                    ),
-                )
-                return []
-
-        except requests.exceptions.RequestException as e:
-            frappe.log_error(title="TPF API Error", message=str(e))
-            return []
-
-    if response is None:
-        return []
-
-    try:
-        result = response.json()
-        result = decode_tpf_response(result)
-    except Exception:
-        frappe.log_error(
-            title="TPF API: Invalid JSON",
-            message=(
-                f"Non-JSON response for {number_plate}: "
-                f"{response.text[:500]}"
-            ),
-        )
-        return []
-
-    data = result.get("pending_transactions", [])
-    fine_list = []
-
-    if data:
-        fine_list = [fine.get("reference") for fine in data if fine.get("reference")]
-        if not fine_list:
-            return fine_list
-
-        stale_filters = {
-            "vehicle": number_plate,
-            "status": ["!=", "PAID"],
-            "reference": ["not in", fine_list],
-        }
-        for record in frappe.get_all(
-            "Vehicle Fine Record", filters=stale_filters, pluck="name"
-        ):
-            frappe.db.set_value("Vehicle Fine Record", record, "status", "PAID")
-
-        existing_refs = frappe.get_all(
+    subject = f"Vehicle Fine Alert: {doc.vehicle or doc.reference}"
+    message = (
+        f"Vehicle {doc.vehicle or '-'} has a new traffic fine "
+        f"({doc.reference or '-'}) with status {doc.status or '-'} "
+        f"and total {doc.total or 0}."
+    )
+    result = send_authority_notification("Vehicle Fine", subject, message)
+    if result.get("sent"):
+        frappe.db.set_value(
             "Vehicle Fine Record",
-            filters={"vehicle": number_plate, "reference": ["in", fine_list]},
-            pluck="reference",
+            doc.name,
+            {
+                "authority_notified_on_new": now_datetime(),
+                "authority_last_notified_status": doc.status or "",
+            },
+            update_modified=False,
         )
-        for fine in data:
-            fine_ref = fine.get("reference")
-            if not fine_ref or fine_ref in existing_refs:
-                continue
-            charge = fine.get("charge") or fine.get("amount")
-            penalty = fine.get("penalty")
-            try:
-                frappe.get_doc(
-                    {
-                        "doctype": "Vehicle Fine Record",
-                        "vehicle": number_plate,
-                        "reference": fine_ref,
-                        "status": fine.get("status") or "PENDING",
-                        "licence": fine.get("licence"),
-                        "location": fine.get("location"),
-                        "officer": fine.get("officer"),
-                        "charge": charge,
-                        "penalty": penalty,
-                        "total": fine.get("total") or (flt(charge) + flt(penalty)),
-                        "offence": fine.get("offence"),
-                        "issued_date": fine.get("issued_date") or fine.get("date"),
-                    }
-                ).insert(ignore_permissions=True)
-            except frappe.exceptions.DuplicateEntryError:
-                pass  
-            except Exception:
-                frappe.log_error(
-                    title=f"Error creating fine record for {number_plate}",
-                    message=frappe.get_traceback(),
-                )
 
-    else:
-        for record in frappe.get_all(
+
+def _notify_vehicle_fine_status_change(docname, vehicle, old_status, new_status):
+    if old_status == new_status:
+        return
+    if not is_authority_notification_event_enabled("Vehicle Fine", "status_change"):
+        return
+
+    subject = f"Vehicle Fine Status Changed: {vehicle or docname}"
+    message = (
+        f"Vehicle {vehicle or '-'} traffic fine status changed "
+        f"from {old_status or '-'} to {new_status or '-'}."
+    )
+    result = send_authority_notification("Vehicle Fine", subject, message)
+    if result.get("sent"):
+        frappe.db.set_value(
             "Vehicle Fine Record",
-            filters={"vehicle": number_plate, "status": ["!=", "PAID"]},
-            pluck="name",
-        ):
-            frappe.db.set_value("Vehicle Fine Record", record, "status", "PAID")
-
-    frappe.db.commit()
-    return fine_list
+            docname,
+            "authority_last_notified_status",
+            new_status or "",
+            update_modified=False,
+        )

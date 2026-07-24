@@ -6,9 +6,10 @@ import requests
 import json
 from datetime import datetime
 from frappe.utils import cint
+from frappe.utils import getdate, now_datetime, nowdate
 from time import sleep
 from frappe.model.document import Document
-from csf_tz.vehicle_authority import get_vehicle_like_records
+from csf_tz.vehicle_authority import get_vehicle_like_records, send_authority_notification
 from csf_tz.csf_tz.doctype.vehicle_fine_record.vehicle_fine_record import (
 	normalize_number_plate,
 	is_valid_number_plate,
@@ -38,6 +39,7 @@ def update_covernote_docs():
 		fetch_and_update_covernote(plate)
 		processed += 1
 
+	notify_tira_covernote_expiry()
 	frappe.logger().info(f"[CoverNote] Processed covernote updates for {processed} vehicles")
 	return {"message": f"Processed covernote updates for {processed} vehicles"}
 
@@ -123,6 +125,55 @@ def fetch_and_update_covernote(plate_number):
 	
 	except Exception as e:
 		frappe.log_error(frappe.get_traceback(), str(e))
+
+
+def notify_tira_covernote_expiry():
+	before_days = cint(frappe.db.get_single_value("CSF TZ Settings", "tira_notify_before_days") or 0)
+	today = getdate(nowdate())
+
+	for row in frappe.get_all(
+		"TZ Insurance Cover Note",
+		fields=["name", "vehicle", "covernotenumber", "covernoteenddate", "authority_last_expiry_notification_key"],
+		limit_page_length=0,
+	):
+		if not row.covernoteenddate:
+			continue
+
+		expiry_date = getdate(str(row.covernoteenddate)[:10])
+		days_left = (expiry_date - today).days
+
+		if days_left < 0:
+			state_key = f"expired:{expiry_date}"
+			subject = f"TIRA Cover Note Expired for Vehicle {row.vehicle or row.covernotenumber}"
+			message = (
+				f"TIRA cover note {row.covernotenumber} for vehicle {row.vehicle or '-'} "
+				f"expired on {expiry_date}. Please renew and update the record."
+			)
+		elif before_days >= 0 and days_left <= before_days:
+			state_key = f"pre-expiry:{expiry_date}"
+			subject = f"TIRA Cover Note Expiry Reminder for Vehicle {row.vehicle or row.covernotenumber}"
+			message = (
+				f"TIRA cover note {row.covernotenumber} for vehicle {row.vehicle or '-'} "
+				f"will expire on {expiry_date} ({days_left} day(s) left). "
+				"Please renew before the expiry date."
+			)
+		else:
+			continue
+
+		if row.authority_last_expiry_notification_key == state_key:
+			continue
+
+		result = send_authority_notification("TIRA", subject, message)
+		if result.get("sent"):
+			frappe.db.set_value(
+				"TZ Insurance Cover Note",
+				row.name,
+				{
+					"authority_last_expiry_notification_key": state_key,
+					"authority_last_expiry_notification_on": now_datetime(),
+				},
+				update_modified=False,
+			)
 
 def get_covernote_details(regnumber):
 	"""Fetch motor insurance details from tira

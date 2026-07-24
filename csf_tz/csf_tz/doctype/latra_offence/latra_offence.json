@@ -17,7 +17,9 @@
   "location",
   "column_break_2",
   "reference_number",
-  "amount"
+  "amount",
+  "authority_notified_on_new",
+  "authority_last_notified_status"
  ],
  "fields": [
   {
@@ -100,6 +102,20 @@
    "fieldtype": "Currency",
    "in_list_view": 1,
    "label": "Amount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "authority_notified_on_new",
+   "fieldtype": "Datetime",
+   "hidden": 1,
+   "label": "Authority Notified On New",
+   "read_only": 1
+  },
+  {
+   "fieldname": "authority_last_notified_status",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Authority Last Notified Status",
    "read_only": 1
   }
  ],

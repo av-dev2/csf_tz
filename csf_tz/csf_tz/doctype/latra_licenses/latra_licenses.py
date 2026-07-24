@@ -9,10 +9,13 @@ from time import sleep
 import frappe
 import requests
 from frappe.utils import cint
+from frappe.utils import getdate, now_datetime, nowdate
 from frappe.model.document import Document
 
 from csf_tz.vehicle_authority import (
 	get_unique_vehicle_plates,
+	is_authority_notification_event_enabled,
+	send_authority_notification,
 )
 from csf_tz.csf_tz.doctype.vehicle_fine_record.vehicle_fine_record import (
 	is_valid_number_plate,
@@ -108,6 +111,7 @@ def update_latra_records(force=0):
 	frappe.db.commit()
 
 	offence_result = update_latra_offences(force=force)
+	notify_latra_license_expiry()
 	_log_sync_summary(license_result, offence_result)
 	return {
 		"licenses": license_result,
@@ -184,12 +188,17 @@ def update_latra_offences(force=0):
 					"offence_date": values["offence_date"],
 					"offence": values["offence"],
 				},
-				"name",
+				["name", "status", "authority_notified_on_new", "authority_last_notified_status"],
+				as_dict=True,
 			)
 			if existing:
-				frappe.db.set_value("Latra Offence", existing, values)
+				old_status = existing.status
+				frappe.db.set_value("Latra Offence", existing.name, values)
+				_notify_latra_offence(existing.name, values, is_new=False, old_status=old_status)
 			else:
-				frappe.get_doc({"doctype": "Latra Offence", **values}).insert(ignore_permissions=True)
+				doc = frappe.get_doc({"doctype": "Latra Offence", **values})
+				doc.insert(ignore_permissions=True)
+				_notify_latra_offence(doc.name, values, is_new=True)
 			saved += 1
 
 		if plate not in rows_by_plate:
@@ -298,6 +307,100 @@ def _upsert_latra_license(plate_number, lic):
 			message=frappe.get_traceback(),
 		)
 		return 0
+
+
+def notify_latra_license_expiry():
+	before_days = cint(frappe.db.get_single_value("CSF TZ Settings", "latra_license_notify_before_days") or 0)
+	today = getdate(nowdate())
+
+	for row in frappe.get_all(
+		"Latra Licenses",
+		fields=["name", "vehicle", "license_number", "license_status", "expire_date", "authority_last_expiry_notification_key"],
+		limit_page_length=0,
+	):
+		if not row.expire_date:
+			continue
+
+		expiry_date = getdate(row.expire_date)
+		days_left = (expiry_date - today).days
+
+		if days_left < 0:
+			state_key = f"expired:{expiry_date}"
+			subject = f"LATRA License Expired for Vehicle {row.vehicle or row.license_number}"
+			message = (
+				f"LATRA license {row.license_number} for vehicle {row.vehicle or '-'} "
+				f"expired on {expiry_date}. Please renew and update the record."
+			)
+		elif before_days >= 0 and days_left <= before_days:
+			state_key = f"pre-expiry:{expiry_date}"
+			subject = f"LATRA License Expiry Reminder for Vehicle {row.vehicle or row.license_number}"
+			message = (
+				f"LATRA license {row.license_number} for vehicle {row.vehicle or '-'} "
+				f"will expire on {expiry_date} ({days_left} day(s) left). "
+				"Please renew before the expiry date."
+			)
+		else:
+			continue
+
+		if row.authority_last_expiry_notification_key == state_key:
+			continue
+
+		result = send_authority_notification("LATRA License", subject, message)
+		if result.get("sent"):
+			frappe.db.set_value(
+				"Latra Licenses",
+				row.name,
+				{
+					"authority_last_expiry_notification_key": state_key,
+					"authority_last_expiry_notification_on": now_datetime(),
+				},
+				update_modified=False,
+			)
+
+
+def _notify_latra_offence(docname, values, is_new=False, old_status=None):
+	current_status = values.get("status") or ""
+
+	if is_new:
+		if not is_authority_notification_event_enabled("LATRA Offence", "new"):
+			return
+		subject = f"LATRA Offence Alert: {values.get('mv_reg_number')}"
+		message = (
+			f"Vehicle {values.get('mv_reg_number') or '-'} has a new LATRA offence "
+			f"({values.get('reference_number') or '-'}) with status {current_status} "
+			f"and amount {values.get('amount') or 0}."
+		)
+		result = send_authority_notification("LATRA Offence", subject, message)
+		if result.get("sent"):
+			frappe.db.set_value(
+				"Latra Offence",
+				docname,
+				{
+					"authority_notified_on_new": now_datetime(),
+					"authority_last_notified_status": current_status,
+				},
+				update_modified=False,
+			)
+		return
+
+	if old_status != current_status:
+		if not is_authority_notification_event_enabled("LATRA Offence", "status_change"):
+			return
+		subject = f"LATRA Offence Status Changed: {values.get('mv_reg_number')}"
+		message = (
+			f"Vehicle {values.get('mv_reg_number') or '-'} LATRA offence "
+			f"({values.get('reference_number') or '-'}) changed status "
+			f"from {old_status or '-'} to {current_status or '-'}."
+		)
+		result = send_authority_notification("LATRA Offence", subject, message)
+		if result.get("sent"):
+			frappe.db.set_value(
+				"Latra Offence",
+				docname,
+				"authority_last_notified_status",
+				current_status,
+				update_modified=False,
+			)
 
 
 def _log_sync_summary(license_result, offence_result):

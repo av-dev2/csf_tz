@@ -7,6 +7,8 @@ TIME_BUDGET_SEC = 50
 MAX_ATTEMPTS = 8
 BASE_BACKOFF = 300
 BACKOFF_JITTER = 0.2
+SUCCESS_INTERVAL_SECONDS = 60 * 60 * 2
+MAX_CALLS_PER_MINUTE = 10
 WORKER_ID = frappe.local.site
 
 # ------------ INTERNAL HELPERS ------------
@@ -63,11 +65,13 @@ def claim_batch(doctype, limit=BATCH_SIZE):
 def mark_done(doctype, task):
     try:
         frappe.db.set_value(doctype, task["name"], {
-            "status": "Done",
+            "status": "Pending",
+            "attempts": 0,
+            "backoff_exp": 0,
             "last_run_at": _now(),
             "claimed_by": "",
             "claimed_at": None,
-            "next_run_at": None,
+            "next_run_at": frappe.utils.add_to_date(_now(), seconds=SUCCESS_INTERVAL_SECONDS),
             "last_error": ""
         })
     except Exception as e:

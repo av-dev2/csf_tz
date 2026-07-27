@@ -110,37 +110,22 @@ def check_fine_all_vehicles(batch_size=20):
     return {"message": f"Processed fine checks for {processed} unique vehicle-like records"}
 
 
-@frappe.whitelist()
-def get_fine(number_plate):
-    """
-    Query the TPF API for pending fines on the given number plate.
-
-    Behaviour:
-    - If the API returns pending transactions:
-        * Create a new Vehicle Fine Record for each reference not yet in ERPNext.
-        * Mark any existing PENDING records whose reference is no longer in the
-          API response as PAID (they have been settled).
-    - If the API returns no pending transactions:
-        * Mark all PENDING records for this plate as PAID.
-
-    Returns a list of fine reference strings that are currently pending
-    according to the TPF API, or [] on any error.
-    """
+def sync_vehicle_fines(number_plate):
     number_plate = normalize_number_plate(number_plate)
 
     if not number_plate:
-        frappe.log_error(
-            title="get_fine: missing number plate",
-            message="get_fine was called with an empty or None number plate",
-        )
-        return []
+        return {
+            "status": "invalid",
+            "message": "Missing number plate",
+            "fine_list": [],
+        }
 
     if not is_valid_number_plate(number_plate):
-        frappe.log_error(
-            title="get_fine: invalid number plate",
-            message=f"Skipping invalid plate: {number_plate}",
-        )
-        return []
+        return {
+            "status": "invalid",
+            "message": f"Skipping invalid plate: {number_plate}",
+            "fine_list": [],
+        }
 
     url = "https://tms.tpf.go.tz/api/OffenceCheck"
     headers = {
@@ -154,7 +139,7 @@ def get_fine(number_plate):
     payload = {"vehicle": number_plate}
 
     max_retries = 3
-    response = None  
+    response = None
 
     for attempt in range(max_retries):
         try:
@@ -162,44 +147,70 @@ def get_fine(number_plate):
                 sleep(5 * attempt)
 
             response = requests.post(url, json=payload, headers=headers, timeout=30)
+            if response.status_code == 429:
+                return {
+                    "status": "rate_limited",
+                    "message": f"TPF rate limited {number_plate}",
+                    "fine_list": [],
+                }
             response.raise_for_status()
-            break 
+            break
 
-        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as exc:
             if attempt < max_retries - 1:
                 continue
             frappe.logger().warning(
                 f"[VehicleFine] Connection timeout for {number_plate} "
                 f"after {max_retries} retries"
             )
-            return []
+            return {
+                "status": "retryable_error",
+                "message": str(exc),
+                "fine_list": [],
+            }
 
         except requests.exceptions.HTTPError:
             status = response.status_code if response is not None else 0
-            if status in (408, 429) or status >= 500:
+            if status in (408,) or status >= 500:
                 if attempt < max_retries - 1:
                     continue
                 frappe.logger().warning(
                     f"[VehicleFine] HTTP {status} for {number_plate} "
                     f"after {max_retries} retries"
                 )
-                return []
-            else:
-                frappe.log_error(
-                    title="TPF API Error",
-                    message=(
-                        f"HTTP {status} for {number_plate}: "
-                        f"{response.text[:500] if response is not None else ''}"
-                    ),
-                )
-                return []
+                return {
+                    "status": "retryable_error",
+                    "message": f"HTTP {status}",
+                    "fine_list": [],
+                }
 
-        except requests.exceptions.RequestException as e:
-            frappe.log_error(title="TPF API Error", message=str(e))
-            return []
+            frappe.log_error(
+                title="TPF API Error",
+                message=(
+                    f"HTTP {status} for {number_plate}: "
+                    f"{response.text[:500] if response is not None else ''}"
+                ),
+            )
+            return {
+                "status": "error",
+                "message": f"HTTP {status}",
+                "fine_list": [],
+            }
+
+        except requests.exceptions.RequestException as exc:
+            frappe.log_error(title="TPF API Error", message=str(exc))
+            return {
+                "status": "error",
+                "message": str(exc),
+                "fine_list": [],
+            }
 
     if response is None:
-        return []
+        return {
+            "status": "retryable_error",
+            "message": "No response from TPF",
+            "fine_list": [],
+        }
 
     try:
         result = response.json()
@@ -212,7 +223,11 @@ def get_fine(number_plate):
                 f"{response.text[:500]}"
             ),
         )
-        return []
+        return {
+            "status": "error",
+            "message": "Invalid JSON response",
+            "fine_list": [],
+        }
 
     data = result.get("pending_transactions", [])
     fine_list = []
@@ -220,7 +235,7 @@ def get_fine(number_plate):
     if data:
         fine_list = [fine.get("reference") for fine in data if fine.get("reference")]
         if not fine_list:
-            return fine_list
+            return {"status": "success", "message": "No fine references", "fine_list": fine_list}
 
         stale_filters = {
             "vehicle": number_plate,
@@ -261,13 +276,12 @@ def get_fine(number_plate):
                     }
                 ).insert(ignore_permissions=True)
             except frappe.exceptions.DuplicateEntryError:
-                pass  
+                pass
             except Exception:
                 frappe.log_error(
                     title=f"Error creating fine record for {number_plate}",
                     message=frappe.get_traceback(),
                 )
-
     else:
         for record in frappe.get_all(
             "Vehicle Fine Record",
@@ -277,4 +291,28 @@ def get_fine(number_plate):
             frappe.db.set_value("Vehicle Fine Record", record, "status", "PAID")
 
     frappe.db.commit()
-    return fine_list
+    return {
+        "status": "success",
+        "message": f"Processed fine sync for {number_plate}",
+        "fine_list": fine_list,
+    }
+
+
+@frappe.whitelist()
+def get_fine(number_plate):
+    """
+    Query the TPF API for pending fines on the given number plate.
+
+    Behaviour:
+    - If the API returns pending transactions:
+        * Create a new Vehicle Fine Record for each reference not yet in ERPNext.
+        * Mark any existing PENDING records whose reference is no longer in the
+          API response as PAID (they have been settled).
+    - If the API returns no pending transactions:
+        * Mark all PENDING records for this plate as PAID.
+
+    Returns a list of fine reference strings that are currently pending
+    according to the TPF API, or [] on any error.
+    """
+    result = sync_vehicle_fines(number_plate)
+    return result.get("fine_list", [])

@@ -11,9 +11,15 @@ import hashlib
 import json
 import requests
 from csf_tz.custom_api import print_out
-from csf_tz.vehicle_authority import get_vehicle_docname_by_plate, get_vehicle_like_records
+from csf_tz.vehicle_authority import (
+    get_vehicle_docname_by_plate,
+    get_vehicle_like_records,
+    is_authority_notification_event_enabled,
+    send_authority_notification,
+)
 import re
 from time import sleep
+from frappe.utils import now_datetime
 from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
@@ -245,7 +251,9 @@ def sync_vehicle_fines(number_plate):
         for record in frappe.get_all(
             "Vehicle Fine Record", filters=stale_filters, pluck="name"
         ):
+            old_status = frappe.db.get_value("Vehicle Fine Record", record, "status")
             frappe.db.set_value("Vehicle Fine Record", record, "status", "PAID")
+            _notify_vehicle_fine_status_change(record, number_plate, old_status, "PAID")
 
         existing_refs = frappe.get_all(
             "Vehicle Fine Record",
@@ -259,7 +267,7 @@ def sync_vehicle_fines(number_plate):
             charge = fine.get("charge") or fine.get("amount")
             penalty = fine.get("penalty")
             try:
-                frappe.get_doc(
+                doc = frappe.get_doc(
                     {
                         "doctype": "Vehicle Fine Record",
                         "vehicle": number_plate,
@@ -274,7 +282,9 @@ def sync_vehicle_fines(number_plate):
                         "offence": fine.get("offence"),
                         "issued_date": fine.get("issued_date") or fine.get("date"),
                     }
-                ).insert(ignore_permissions=True)
+                )
+                doc.insert(ignore_permissions=True)
+                _notify_vehicle_fine_new(doc)
             except frappe.exceptions.DuplicateEntryError:
                 pass
             except Exception:
@@ -288,7 +298,9 @@ def sync_vehicle_fines(number_plate):
             filters={"vehicle": number_plate, "status": ["!=", "PAID"]},
             pluck="name",
         ):
+            old_status = frappe.db.get_value("Vehicle Fine Record", record, "status")
             frappe.db.set_value("Vehicle Fine Record", record, "status", "PAID")
+            _notify_vehicle_fine_status_change(record, number_plate, old_status, "PAID")
 
     frappe.db.commit()
     return {
@@ -316,3 +328,48 @@ def get_fine(number_plate):
     """
     result = sync_vehicle_fines(number_plate)
     return result.get("fine_list", [])
+
+
+def _notify_vehicle_fine_new(doc):
+    if not is_authority_notification_event_enabled("Vehicle Fine", "new"):
+        return
+
+    subject = f"Vehicle Fine Alert: {doc.vehicle or doc.reference}"
+    message = (
+        f"Vehicle {doc.vehicle or '-'} has a new traffic fine "
+        f"({doc.reference or '-'}) with status {doc.status or '-'} "
+        f"and total {doc.total or 0}."
+    )
+    result = send_authority_notification("Vehicle Fine", subject, message)
+    if result.get("sent"):
+        frappe.db.set_value(
+            "Vehicle Fine Record",
+            doc.name,
+            {
+                "authority_notified_on_new": now_datetime(),
+                "authority_last_notified_status": doc.status or "",
+            },
+            update_modified=False,
+        )
+
+
+def _notify_vehicle_fine_status_change(docname, vehicle, old_status, new_status):
+    if old_status == new_status:
+        return
+    if not is_authority_notification_event_enabled("Vehicle Fine", "status_change"):
+        return
+
+    subject = f"Vehicle Fine Status Changed: {vehicle or docname}"
+    message = (
+        f"Vehicle {vehicle or '-'} traffic fine status changed "
+        f"from {old_status or '-'} to {new_status or '-'}."
+    )
+    result = send_authority_notification("Vehicle Fine", subject, message)
+    if result.get("sent"):
+        frappe.db.set_value(
+            "Vehicle Fine Record",
+            docname,
+            "authority_last_notified_status",
+            new_status or "",
+            update_modified=False,
+        )

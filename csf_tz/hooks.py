@@ -115,11 +115,13 @@ after_install = [
     "csf_tz.patches.custom_fields.payroll_approval_custom_fields.execute",
     "csf_tz.patches.custom_fields.attendance_overtime_calculation_custom_fields.execute",
     "csf_tz.utils.create_custom_fields.execute",
+    "csf_tz.utils.authority_notification_settings_fields.execute",
     "csf_tz.utils.create_property_setter.execute",
 ]
 
 after_migrate = [
     "csf_tz.utils.create_custom_fields.execute",
+    "csf_tz.utils.authority_notification_settings_fields.execute",
     "csf_tz.utils.create_property_setter.execute",
     "csf_tz.patches.update_payware_settings_values_to_csf_tz_settings.execute",
     "csf_tz.patches.custom_fields.create_custom_fields_for_trade_in_feature.execute",

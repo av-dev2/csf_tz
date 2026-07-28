@@ -40,7 +40,9 @@
   "section_break_30",
   "insurance_provider",
   "section_break_31",
-  "policy_holders"
+  "policy_holders",
+  "authority_last_expiry_notification_key",
+  "authority_last_expiry_notification_on"
  ],
  "fields": [
   {
@@ -251,6 +253,20 @@
    "fieldname": "policy_holders",
    "fieldtype": "Table",
    "options": "TZ Insurance Policy Holder Detail",
+   "read_only": 1
+  },
+  {
+   "fieldname": "authority_last_expiry_notification_key",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Authority Last Expiry Notification Key",
+   "read_only": 1
+  },
+  {
+   "fieldname": "authority_last_expiry_notification_on",
+   "fieldtype": "Datetime",
+   "hidden": 1,
+   "label": "Authority Last Expiry Notification On",
    "read_only": 1
   }
  ],

@@ -373,3 +373,30 @@ def _notify_vehicle_fine_status_change(docname, vehicle, old_status, new_status)
             new_status or "",
             update_modified=False,
         )
+
+
+def send_pending_vehicle_fine_notifications():
+    for row in frappe.get_all(
+        "Vehicle Fine Record",
+        fields=[
+            "name",
+            "vehicle",
+            "reference",
+            "status",
+            "total",
+            "authority_notified_on_new",
+            "authority_last_notified_status",
+        ],
+        limit_page_length=0,
+    ):
+        doc = frappe._dict(row)
+
+        if not doc.authority_notified_on_new:
+            _notify_vehicle_fine_new(doc)
+
+        last_status = doc.authority_last_notified_status or ""
+        current_status = doc.status or ""
+        if last_status and current_status and last_status != current_status:
+            _notify_vehicle_fine_status_change(doc.name, doc.vehicle, last_status, current_status)
+
+    frappe.db.commit()

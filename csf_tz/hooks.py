@@ -303,6 +303,8 @@ scheduler_events = {
 		"csf_tz.csftz_hooks.additional_salary.generate_additional_salary_records",
 		"csf_tz.csftz_hooks.exchange_calculations.update_pending_transactions",
 		"csf_tz.csf_tz.doctype.vehicle_sync_task.processor.seed_vehicle_sync_queue",
+		"csf_tz.csf_tz.doctype.latra_licenses.latra_licenses.update_latra_offences",
+		"csf_tz.vehicle_authority.run_daily_authority_notifications",
 	],
 	# "hourly": [
 	# 	"csf_tz.tasks.hourly"

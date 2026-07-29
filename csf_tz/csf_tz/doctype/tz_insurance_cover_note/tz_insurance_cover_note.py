@@ -39,7 +39,6 @@ def update_covernote_docs():
 		fetch_and_update_covernote(plate)
 		processed += 1
 
-	notify_tira_covernote_expiry()
 	frappe.logger().info(f"[CoverNote] Processed covernote updates for {processed} vehicles")
 	return {"message": f"Processed covernote updates for {processed} vehicles"}
 
@@ -174,6 +173,8 @@ def notify_tira_covernote_expiry():
 				},
 				update_modified=False,
 			)
+
+	frappe.db.commit()
 
 def get_covernote_details(regnumber):
 	"""Fetch motor insurance details from tira

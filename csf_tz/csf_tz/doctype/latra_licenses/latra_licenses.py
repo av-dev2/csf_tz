@@ -109,13 +109,8 @@ def update_latra_records(force=0):
 		}
 
 	frappe.db.commit()
-
-	offence_result = update_latra_offences(force=force)
-	notify_latra_license_expiry()
-	_log_sync_summary(license_result, offence_result)
 	return {
 		"licenses": license_result,
-		"offences": offence_result,
 	}
 
 
@@ -221,6 +216,38 @@ def update_latra_offences(force=0):
 		"total_vehicles": len(plates),
 		"completed_cycle": True,
 	}
+
+
+def send_pending_latra_offence_notifications():
+	for row in frappe.get_all(
+		"Latra Offence",
+		fields=[
+			"name",
+			"mv_reg_number",
+			"reference_number",
+			"amount",
+			"status",
+			"authority_notified_on_new",
+			"authority_last_notified_status",
+		],
+		limit_page_length=0,
+	):
+		values = {
+			"mv_reg_number": row.mv_reg_number,
+			"reference_number": row.reference_number,
+			"amount": row.amount,
+			"status": row.status,
+		}
+
+		if not row.authority_notified_on_new:
+			_notify_latra_offence(row.name, values, is_new=True)
+
+		last_status = row.authority_last_notified_status or ""
+		current_status = row.status or ""
+		if last_status and current_status and last_status != current_status:
+			_notify_latra_offence(row.name, values, is_new=False, old_status=last_status)
+
+	frappe.db.commit()
 def sync_all_latra_licenses(token):
 	plates = get_unique_vehicle_plates(
 		normalize_number_plate=normalize_number_plate,

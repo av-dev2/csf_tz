@@ -195,3 +195,21 @@ def send_authority_notification(reference_type, subject, message, now=True):
 		now=now,
 	)
 	return {"sent": True, "reason": "sent", "recipients": recipients}
+
+
+def run_daily_authority_notifications():
+	from csf_tz.csf_tz.doctype.latra_licenses.latra_licenses import (
+		notify_latra_license_expiry,
+		send_pending_latra_offence_notifications,
+	)
+	from csf_tz.csf_tz.doctype.tz_insurance_cover_note.tz_insurance_cover_note import (
+		notify_tira_covernote_expiry,
+	)
+	from csf_tz.csf_tz.doctype.vehicle_fine_record.vehicle_fine_record import (
+		send_pending_vehicle_fine_notifications,
+	)
+
+	notify_latra_license_expiry()
+	send_pending_latra_offence_notifications()
+	notify_tira_covernote_expiry()
+	send_pending_vehicle_fine_notifications()

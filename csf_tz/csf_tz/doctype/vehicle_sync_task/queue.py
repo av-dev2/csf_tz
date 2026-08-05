@@ -2,13 +2,13 @@ import secrets
 import frappe
 
 # ------------ CONFIGURATION ------------
-BATCH_SIZE = 5
+BATCH_SIZE = 1
 TIME_BUDGET_SEC = 50
-MAX_ATTEMPTS = 8
+MAX_ATTEMPTS = 4
 BASE_BACKOFF = 300
 BACKOFF_JITTER = 0.2
 SUCCESS_INTERVAL_SECONDS = 60 * 60 * 2
-MAX_CALLS_PER_MINUTE = 10
+MAX_CALLS_PER_MINUTE = 1
 WORKER_ID = frappe.local.site
 
 # ------------ INTERNAL HELPERS ------------

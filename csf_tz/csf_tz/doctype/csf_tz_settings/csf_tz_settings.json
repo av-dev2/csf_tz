@@ -123,12 +123,6 @@
    "label": "Make Manufacture Entry instead of Material Receipt"
   },
   {
-   "default": "0",
-   "fieldname": "allow_delete_in_sql_command",
-   "fieldtype": "Check",
-   "label": "Allow Delete in SQL Command"
-  },
-  {
    "fieldname": "sle_gle_reposting_start_date",
    "fieldtype": "Date",
    "label": "SLE GLE Reposting Start Date"

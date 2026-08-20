@@ -14,11 +14,13 @@ dependencies = [
     "pandas",
     "paramiko",
     "PGPy",
+    "standard-imghdr",
     "PyPDF3",
     "PyPDF2",
     "pyotp",
     "qrcode",
     "xmltodict",
+    "selcom-apigw-client",
 ]
 
 [build-system]
@@ -33,6 +35,7 @@ indent-style = "tab"
 
 [tool.bench.frappe-dependencies]
 frappe = ">=16.0.0,<17.0.0"
+erpnext = ">=16.0.0,<17.0.0"
 
 # These dependencies are only installed when developer mode is enabled
 [tool.bench.dev-dependencies]

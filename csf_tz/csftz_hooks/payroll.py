@@ -1,10 +1,7 @@
-from __future__ import unicode_literals
 import frappe
 from frappe import _
-import frappe
 import os
 from frappe.utils.background_jobs import enqueue
-from frappe.utils.pdf import get_pdf, cleanup
 from io import BytesIO
 from PyPDF3 import PdfFileReader, PdfFileWriter
 from csf_tz import console
@@ -69,31 +66,61 @@ def before_cancel_payroll_entry(doc, method):
 
 @frappe.whitelist()
 def update_slips(payroll_entry):
-    ss_list = frappe.get_all("Salary Slip", filters={"payroll_entry": payroll_entry})
-    count = 0
-    for salary in ss_list:
-        ss_doc = frappe.get_doc("Salary Slip", salary.name)
-        if ss_doc.docstatus != 0:
-            continue
-        ss_doc.earnings = []
-        ss_doc.deductions = []
-        ss_doc.queue_action("save", timeout=4600)
-        count += 1
+    salary_slips = frappe.get_all(
+        "Salary Slip",
+        filters={"payroll_entry": payroll_entry, "docstatus": 0},
+        pluck="name",
+    )
+    count = len(salary_slips)
+
+    job = enqueue(
+        method=enqueue_update_slips,
+        queue="short",
+        timeout=4600,
+        is_async=True,
+        enqueue_after_commit=False,
+        job_id=f"update-salary-slips::{payroll_entry}",
+        deduplicate=True,
+        payroll_entry=payroll_entry,
+    )
 
     frappe.msgprint(_("{0} Salary Slips is updated".format(count)))
     return count
 
 
+def enqueue_update_slips(payroll_entry):
+    salary_slips = frappe.get_all(
+        "Salary Slip", filters={"payroll_entry": payroll_entry}, pluck="name"
+    )
+
+    for salary_slip in salary_slips:
+        try:
+            _update_salary_slip(salary_slip)
+        except frappe.DocumentLockedError:
+            continue
+        except Exception:
+            frappe.log_error(
+                frappe.get_traceback(),
+                _("Failed to update Salary Slip {0}").format(salary_slip),
+            )
+
+
 @frappe.whitelist()
-def update_slip(salary_slip):
+def update_slip(salary_slip, show_message=True):
+    result = _update_salary_slip(salary_slip)
+    if show_message and result == "updated":
+        frappe.msgprint(_("Salary Slips is updated"))
+    return result
+
+
+def _update_salary_slip(salary_slip):
     ss_doc = frappe.get_doc("Salary Slip", salary_slip)
     if ss_doc.docstatus != 0:
-        return
+        return "skipped"
     ss_doc.earnings = []
     ss_doc.deductions = []
     ss_doc.save()
-    frappe.msgprint(_("Salary Slips is updated"))
-    return "True"
+    return "updated"
 
 
 @frappe.whitelist()
@@ -281,95 +308,6 @@ def enqueue_apply_workflow_for_salary_slips(kwargs):
             title = _(f"Error for Salary Slip: <b>{slip_doc.name}</b>")
             frappe.log_error(traceback, title)
             continue
-
-
-@frappe.whitelist()
-def generate_component_in_salary_slip_update(doc, method):
-    if not doc.name.upper().startswith("NEW") and frappe.db.get_single_value(
-        "CSF TZ Settings", "ot_module"
-    ):
-        base = 0
-        list = []
-
-        for component in doc.earnings:
-            if str(component.salary_component).upper() == "BASIC":
-                base = component.amount / doc.payment_days * doc.total_working_days
-                list.append(component)
-        if base == 0:
-            f"Basic Component not Found on this Salary Slip: <b>{doc.name}</b>"
-
-        for component in doc.salary_slip_ot_component:
-            earning_dict = frappe.new_doc("Salary Detail")
-            earning_dict.parent = doc.name
-            earning_dict.parenttype = doc.doctype
-            earning_dict.parentfield = "earnings"
-            earning_dict.salary_component = component.salary_component
-            earning_dict.amount = calculate_amount(
-                base, component.no_of_hours, component.salary_component
-            )
-            list.append(earning_dict)
-
-            doc.earnings = []
-            doc.earnings.extend(list)
-            doc.calculate_net_pay()
-
-
-@frappe.whitelist()
-def generate_component_in_salary_slip_insert(doc, method):
-    if frappe.db.get_single_value("CSF TZ Settings", "ot_module"):
-        doc.salary_slip_ot_component = []
-        employee = frappe.get_doc("Employee", doc.employee)
-        doc.run_method("get_emp_and_leave_details")
-        base = 0
-        list = []
-        for component in doc.earnings:
-            if str(component.salary_component).upper() == "BASIC":
-                base = component.amount / doc.payment_days * doc.total_working_days
-                list.append(component)
-        if base == 0:
-            frappe.throw(
-                f"Basic Component not Found on this Salary Slip: <b>{doc.name}</b>"
-            )
-
-        for component in employee.employee_ot_component:
-            component.doctype = "Salary Slip OT Component"
-            component.parentfield = "salary_slip_ot_component"
-            doc.salary_slip_ot_component.append(component)
-
-            earning_dict = frappe.new_doc("Salary Detail")
-            earning_dict.parent = doc.name
-            earning_dict.parenttype = doc.doctype
-            earning_dict.parentfield = "earnings"
-            earning_dict.salary_component = component.salary_component
-            earning_dict.amount = calculate_amount(
-                base, component.no_of_hours, component.salary_component
-            )
-            list.append(earning_dict)
-
-            doc.earnings = []
-            doc.earnings.extend(list)
-            doc.calculate_net_pay()
-
-
-@frappe.whitelist()
-def calculate_amount(base, no_of_hours, salary_component):
-    working_hours_per_month = frappe.db.get_single_value(
-        "CSF TZ Settings", "working_hours_per_month"
-    )
-    based_on_hourly_rate, hourly_rate = frappe.db.get_value(
-        "Salary Component", salary_component, ["based_on_hourly_rate", "hourly_rate"]
-    )
-    if based_on_hourly_rate:
-        calc = (
-            (flt(base) / flt(working_hours_per_month))
-            * flt(no_of_hours)
-            * (flt(hourly_rate) / 100)
-        )
-        return calc
-    else:
-        frappe.throw(
-            f"Hourly Rate not set on this Salary Component: <b>{salary_component}</b>, Please set it and try again."
-        )
 
 
 @frappe.whitelist()

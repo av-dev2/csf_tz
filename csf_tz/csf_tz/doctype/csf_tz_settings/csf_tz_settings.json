@@ -5,28 +5,36 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
-  "unique_records",
+  "tab_sales_purchase",
+  "sales_invoice_section",
   "validate_net_rate",
   "fetch_default_tax_category",
-  "enable_dependent_auto_permission",
   "limit_uom_as_item_uom",
+  "validate_grand_total_vs_payment_amount_on_sales_invoice",
+  "item_qty_poppup_message",
+  "column_break_sis",
   "show_customer_outstanding_in_sales_order",
+  "auto_pos_for_role",
+  "disable_get_outstanding_functionality",
+  "po_mr_section",
   "allow_reopen_of_po_based_on_role",
   "role_to_reopen_po",
+  "column_break_pomr",
   "allow_reopen_of_material_request_based_on_role",
   "role_to_reopen_material_request",
-  "disable_get_outstanding_functionality",
-  "allow_inter_company_stock_transfer",
-  "column_break_3",
-  "auto_pos_for_role",
+  "sales_invoice_qty_settings_section",
+  "override_sales_invoice_qty",
+  "tab_stock_accounting",
+  "stock_inventory_section",
   "is_manufacture",
   "allow_batch_splitting",
-  "item_qty_poppup_message",
-  "validate_grand_total_vs_payment_amount_on_sales_invoice",
-  "target_warehouse_based_price_list",
-  "enable_write_off_jv_si",
   "auto_stock_reconciliation",
+  "column_break_stock",
+  "unique_records",
+  "write_off_section",
+  "enable_write_off_jv_si",
   "enable_write_off_jv_pi",
+  "column_break_wo",
   "enable_write_off_jv_pe",
   "section_break_8",
   "sle_gle_reposting_start_date",
@@ -38,10 +46,7 @@
   "column_break_wdzp",
   "check_budget_in_mr",
   "check_budget_in_je",
-  "trade_in_settings_section",
-  "enable_trade_in",
-  "sales_invoice_qty_settings_section",
-  "override_sales_invoice_qty",
+  "tab_hr_payroll",
   "payroll_overrides_section",
   "enable_payroll_approval",
   "override_salary_slip_email_message",
@@ -60,10 +65,29 @@
   "default_account_for_additional_component_cash_journal",
   "column_break_bhc2q",
   "ot_module",
+  "tab_system_data",
   "tz_regions_section",
   "populate_tz_regions",
   "column_break_tz_regions",
-  "tz_regions_populated"
+  "tz_regions_populated",
+  "vehicle_sync_settings_section",
+  "enable_sync",
+  "batch_size",
+  "column_break_gdub",
+  "sync_interval",
+  "authority_notification_section",
+  "enable_latra_license_notifications",
+  "enable_latra_offence_notifications",
+  "enable_tira_notifications",
+  "enable_vehicle_fine_notifications",
+  "column_break_authority_notification",
+  "latra_license_notify_before_days",
+  "latra_offence_notify_on_new",
+  "latra_offence_notify_on_status_change",
+  "tira_notify_before_days",
+  "vehicle_fine_notify_on_new",
+  "vehicle_fine_notify_on_status_change",
+  "authority_notification_roles"
  ],
  "fields": [
   {
@@ -85,10 +109,6 @@
    "label": "Validate Net Rate in Sales Invoice"
   },
   {
-   "fieldname": "column_break_3",
-   "fieldtype": "Column Break"
-  },
-  {
    "default": "0",
    "description": "Fetch Tax Category from Default Tax Templates",
    "fieldname": "fetch_default_tax_category",
@@ -108,7 +128,8 @@
   },
   {
    "fieldname": "section_break_8",
-   "fieldtype": "Section Break"
+   "fieldtype": "Section Break",
+   "label": "SLE/GLE Reposting"
   },
   {
    "fieldname": "column_break_10",
@@ -118,12 +139,6 @@
    "fieldname": "start_sle_gle_reporting",
    "fieldtype": "Button",
    "label": "Start SLE GLE Reporting"
-  },
-  {
-   "default": "1",
-   "fieldname": "enable_dependent_auto_permission",
-   "fieldtype": "Check",
-   "label": "Enable Dependent Auto Permission"
   },
   {
    "default": "0",
@@ -210,12 +225,6 @@
   },
   {
    "default": "0",
-   "fieldname": "target_warehouse_based_price_list",
-   "fieldtype": "Check",
-   "label": "Enable Target Warehouse Based Buying Price List"
-  },
-  {
-   "default": "0",
    "fieldname": "override_salary_slip_email_message",
    "fieldtype": "Check",
    "label": "Override Salary Slip Email Message"
@@ -228,7 +237,6 @@
    "mandatory_depends_on": "eval: doc.override_salary_slip_email_message == 1"
   },
   {
-   "collapsible": 1,
    "fieldname": "payware_settings_section",
    "fieldtype": "Section Break",
    "label": "Payware Settings"
@@ -307,25 +315,12 @@
    "label": "Override Sales Invoice Qty"
   },
   {
-   "fieldname": "trade_in_settings_section",
-   "fieldtype": "Section Break",
-   "label": "Trade In Settings"
-  },
-  {
-   "default": "0",
-   "description": "Enable this feature to handle trade-in items directly within Sales Invoices.",
-   "fieldname": "enable_trade_in",
-   "fieldtype": "Check",
-   "label": "Enable Trade In"
-  },
-  {
    "default": "0",
    "fieldname": "disable_get_outstanding_functionality",
    "fieldtype": "Check",
    "label": "Disable Automatic Get Outstanding Documents"
   },
   {
-   "collapsible": 1,
    "fieldname": "tz_regions_section",
    "fieldtype": "Section Break",
    "label": "TZ Regions Data"
@@ -348,12 +343,6 @@
    "fieldtype": "Check",
    "label": "TZ Regions Data Populated",
    "read_only": 1
-  },
-  {
-   "default": "0",
-   "fieldname": "allow_inter_company_stock_transfer",
-   "fieldtype": "Check",
-   "label": "Allow Inter company stock transfer"
   },
   {
    "default": "0",
@@ -415,12 +404,183 @@
    "fieldname": "check_budget_in_je",
    "fieldtype": "Check",
    "label": "Check Budget in JE"
+  },
+  {
+   "fieldname": "vehicle_sync_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Vehicle Sync Settings"
+  },
+  {
+   "default": "0",
+   "description": "Enable or disable the background sync process for traffic fine records.",
+   "fieldname": "enable_sync",
+   "fieldtype": "Check",
+   "label": "Enable Sync"
+  },
+  {
+   "depends_on": "eval:doc.enable_sync",
+   "description": "Maximum number of records to process in a single batch to manage API load.",
+   "fieldname": "batch_size",
+   "fieldtype": "Int",
+   "label": "Batch Size",
+   "mandatory_depends_on": "eval:doc.enable_sync"
+  },
+  {
+   "fieldname": "column_break_gdub",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.enable_sync",
+   "description": "The minimum duration to wait before a record becomes eligible for the next synchronization attempt.",
+   "fieldname": "sync_interval",
+   "fieldtype": "Int",
+   "label": "Sync Interval (Minutes)",
+   "mandatory_depends_on": "eval:doc.enable_sync"
+  },
+  {
+   "fieldname": "authority_notification_section",
+   "fieldtype": "Section Break",
+   "label": "Authority Notifications"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_latra_license_notifications",
+   "fieldtype": "Check",
+   "label": "Enable LATRA License Notifications"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_latra_offence_notifications",
+   "fieldtype": "Check",
+   "label": "Enable LATRA Offence Notifications"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_tira_notifications",
+   "fieldtype": "Check",
+   "label": "Enable TIRA Notifications"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_vehicle_fine_notifications",
+   "fieldtype": "Check",
+   "label": "Enable Vehicle Fine Notifications"
+  },
+  {
+   "fieldname": "column_break_authority_notification",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "7",
+   "depends_on": "eval:doc.enable_latra_license_notifications",
+   "fieldname": "latra_license_notify_before_days",
+   "fieldtype": "Int",
+   "label": "LATRA License Notify Before Days",
+   "mandatory_depends_on": "eval:doc.enable_latra_license_notifications"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_latra_offence_notifications",
+   "fieldname": "latra_offence_notify_on_new",
+   "fieldtype": "Check",
+   "label": "LATRA Offence Notify On New"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enable_latra_offence_notifications",
+   "fieldname": "latra_offence_notify_on_status_change",
+   "fieldtype": "Check",
+   "label": "LATRA Offence Notify On Status Change"
+  },
+  {
+   "default": "7",
+   "depends_on": "eval:doc.enable_tira_notifications",
+   "fieldname": "tira_notify_before_days",
+   "fieldtype": "Int",
+   "label": "TIRA Notify Before Days",
+   "mandatory_depends_on": "eval:doc.enable_tira_notifications"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_vehicle_fine_notifications",
+   "fieldname": "vehicle_fine_notify_on_new",
+   "fieldtype": "Check",
+   "label": "Vehicle Fine Notify On New"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enable_vehicle_fine_notifications",
+   "fieldname": "vehicle_fine_notify_on_status_change",
+   "fieldtype": "Check",
+   "label": "Vehicle Fine Notify On Status Change"
+  },
+  {
+   "fieldname": "authority_notification_roles",
+   "fieldtype": "Table",
+   "label": "Authority Notification Roles",
+   "options": "Authority Notification Role"
+  },
+  {
+   "fieldname": "sales_invoice_section",
+   "fieldtype": "Section Break",
+   "label": "Sales Invoice & Tax"
+  },
+  {
+   "fieldname": "column_break_sis",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "po_mr_section",
+   "fieldtype": "Section Break",
+   "label": "Purchase Order & Material Request"
+  },
+  {
+   "fieldname": "column_break_pomr",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "stock_inventory_section",
+   "fieldtype": "Section Break",
+   "label": "Stock & Inventory"
+  },
+  {
+   "fieldname": "column_break_stock",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "write_off_section",
+   "fieldtype": "Section Break",
+   "label": "Write-Off Journal Entries"
+  },
+  {
+   "fieldname": "column_break_wo",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "tab_sales_purchase",
+   "fieldtype": "Tab Break",
+   "label": "Sales & Purchase"
+  },
+  {
+   "fieldname": "tab_stock_accounting",
+   "fieldtype": "Tab Break",
+   "label": "Stock & Accounting"
+  },
+  {
+   "fieldname": "tab_hr_payroll",
+   "fieldtype": "Tab Break",
+   "label": "HR & Payroll"
+  },
+  {
+   "fieldname": "tab_system_data",
+   "fieldtype": "Tab Break",
+   "label": "System & Data"
   }
  ],
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-07-10 00:00:00.000000",
+ "modified": "2026-02-27 19:27:06.051100",
  "modified_by": "Administrator",
  "module": "CSF TZ",
  "name": "CSF TZ Settings",

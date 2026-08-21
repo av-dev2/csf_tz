@@ -141,12 +141,6 @@ def execute():
 				"label": "Auto Submit For Sales Withholding",
 			},
 			{
-				"fieldname": "education_section",
-				"fieldtype": "Section Break",
-				"insert_after": "auto_submit_for_sales_withholding",
-				"label": "Education",
-			},
-			{
 				"fieldname": "bypass_material_request_validation",
 				"fieldtype": "Check",
 				"insert_after": "stock_adjustment_account",

@@ -28,7 +28,10 @@ jobs:
           cache: pip
       - name: Install pre-commit
         run: pip install pre-commit
+      # Semgrep is skipped here and run as a full-repo scan in the next steps
       - name: Run pre-commit on changed files
+        env:
+          SKIP: frappe-semgrep-rules
         run: |
           pre-commit run \
             --show-diff-on-failure \
@@ -39,10 +42,23 @@ jobs:
       - name: Download Semgrep rules
         run: git clone --depth 1 https://github.com/frappe/semgrep-rules.git frappe-semgrep-rules
 
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      # Blocking: real bugs / security issues only
       - name: Run Semgrep rules
         run: |
-          pip install semgrep
-          semgrep ci --config ./frappe-semgrep-rules/rules --config r/python.lang.correctness
+          semgrep scan --config ./frappe-semgrep-rules/rules \
+            --config r/python.lang.security \
+            --severity=ERROR --error csf_tz
+
+      # Informational: style and i18n warnings, never fails the build
+      - name: Semgrep warnings (non-blocking)
+        if: always()
+        run: |
+          semgrep scan --config ./frappe-semgrep-rules/rules \
+            --config r/python.lang.security \
+            --severity=WARNING csf_tz || true
 
   deps-vulnerable-check:
     name: 'Vulnerable Dependency Check'

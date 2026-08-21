@@ -1,7 +1,8 @@
 import frappe
-from frappe.utils import add_to_date, now
-from frappe.query_builder.functions import Coalesce, CombineDatetime
 from erpnext.stock.stock_ledger import get_previous_sle_of_current_voucher
+from frappe.query_builder.functions import CombineDatetime
+from frappe.utils import add_to_date, now
+
 
 def has_correct_balance_qty(previous_sle, sles):
 	balance_qty = previous_sle.qty_after_transaction
@@ -16,6 +17,7 @@ def has_correct_balance_qty(previous_sle, sles):
 				return False
 
 	return True
+
 
 def create_repost_item_valuation_entry(args):
 	args = frappe._dict(args)
@@ -32,31 +34,38 @@ def create_repost_item_valuation_entry(args):
 	repost_entry.save()
 	repost_entry.submit()
 
-from_time = add_to_date(now(), hours=-2)
 
-table = frappe.qb.DocType("Stock Ledger Entry")
-sles = (
-    frappe.qb.from_(table)
-    .select(table.item_code, table.warehouse,
-		table.voucher_type, table.voucher_no,
-		table.posting_date, table.posting_time, table.qty_after_transaction)
-    .where(
-    	(table.is_cancelled == 0)
-        & (CombineDatetime(table.posting_date, table.posting_time) >= from_time)
-	)
-	.orderby(CombineDatetime(table.posting_date, table.posting_time))
-	.orderby(table.creation)
-).run(as_dict=True)
+def execute():
+	from_time = add_to_date(now(), hours=-2)
 
-checked_item_warehouse = []
+	table = frappe.qb.DocType("Stock Ledger Entry")
+	sles = (
+		frappe.qb.from_(table)
+		.select(
+			table.item_code,
+			table.warehouse,
+			table.voucher_type,
+			table.voucher_no,
+			table.posting_date,
+			table.posting_time,
+			table.qty_after_transaction,
+		)
+		.where(
+			(table.is_cancelled == 0) & (CombineDatetime(table.posting_date, table.posting_time) >= from_time)
+		)
+		.orderby(CombineDatetime(table.posting_date, table.posting_time))
+		.orderby(table.creation)
+	).run(as_dict=True)
 
-for sle in sles:
-	if [sle.item_code, sle.warehouse] in checked_item_warehouse:
-		continue
+	checked_item_warehouse = []
 
-	checked_item_warehouse.append([sle.item_code, sle.warehouse])
+	for sle in sles:
+		if [sle.item_code, sle.warehouse] in checked_item_warehouse:
+			continue
 
-	previous_sle = get_previous_sle_of_current_voucher(sle, exclude_current_voucher=True)
+		checked_item_warehouse.append([sle.item_code, sle.warehouse])
 
-	if not has_correct_balance_qty(previous_sle, sles):
-		create_repost_item_valuation_entry(previous_sle)
+		previous_sle = get_previous_sle_of_current_voucher(sle, exclude_current_voucher=True)
+
+		if not has_correct_balance_qty(previous_sle, sles):
+			create_repost_item_valuation_entry(previous_sle)

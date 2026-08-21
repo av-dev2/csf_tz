@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import unicode_literals
-
 app_name = "csf_tz"
 app_title = "CSF TZ"
 app_publisher = "Aakvatech"
@@ -13,7 +10,7 @@ required_apps = ["frappe/erpnext"]
 
 
 # Override Document Class
-override_doctype_class = {
+override_doctype_class = {  # nosemgrep: frappe-semgrep-rules.rules.override-doctype-class
 	"Salary Slip": "csf_tz.overrides.salary_slip.SalarySlip",
 	"Additional Salary": "csf_tz.overrides.additional_salary.AdditionalSalary",
 	"Leave Encashment": "csf_tz.overrides.leave_encashment.LeaveEncashment",
@@ -125,12 +122,12 @@ after_install = [
 
 after_migrate = [
 	"csf_tz.utils.create_custom_fields.execute",
-    "csf_tz.utils.authority_notification_settings_fields.execute",
+	"csf_tz.utils.authority_notification_settings_fields.execute",
 	"csf_tz.utils.create_property_setter.execute",
 	"csf_tz.patches.custom_fields.vfd_providers_updated_custom_fields.execute",
 	"csf_tz.patches.migrate_vfd_providers_to_csf_tz.execute",
 	"csf_tz.patches.remove_ot_component_custom_fields.execute",
-    "csf_tz.patches.custom_fields.attendance_overtime_calculation_custom_fields.execute",
+	"csf_tz.patches.custom_fields.attendance_overtime_calculation_custom_fields.execute",
 ]
 
 # Desk Notifications

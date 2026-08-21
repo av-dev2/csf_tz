@@ -205,7 +205,25 @@ def get_gl_entries(filters, accounting_dimensions):
 		as_dict=1,
 	)
 
-	gl_entries_students = frappe.db.sql(
+	gl_entries_students = []
+	if frappe.db.exists("DocType", "Student"):
+		gl_entries_students = get_student_gl_entries(
+			filters, dimension_fields, select_fields, distributed_cost_center_query, order_by_statement
+		)
+
+	gl_entries = (gl_entries_all_except_students or []) + (gl_entries_students or [])
+
+	if filters.get("presentation_currency"):
+		return convert_to_presentation_currency(gl_entries, currency_map, filters.get("company"))
+	else:
+		return gl_entries
+
+
+def get_student_gl_entries(
+	filters, dimension_fields, select_fields, distributed_cost_center_query, order_by_statement
+):
+	"""Student party names come from the education app, so this only runs when it is installed."""
+	return frappe.db.sql(
 		f"""
         select
             gle.name as gl_entry, posting_date, account, party_type, CONCAT(std.first_name, " ", IFNULL(std.middle_name, ''), " ", IFNULL(std.last_name, '')) as party,
@@ -222,13 +240,6 @@ def get_gl_entries(filters, accounting_dimensions):
 		filters,
 		as_dict=1,
 	)
-
-	gl_entries = (gl_entries_all_except_students or []) + (gl_entries_students or [])
-
-	if filters.get("presentation_currency"):
-		return convert_to_presentation_currency(gl_entries, currency_map, filters.get("company"))
-	else:
-		return gl_entries
 
 
 def get_conditions(filters):

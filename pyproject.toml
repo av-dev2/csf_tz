@@ -29,9 +29,16 @@ build-backend = "flit_core.buildapi"
 
 [tool.ruff]
 line-length = 110
+target-version = "py310"
 
 [tool.ruff.format]
+quote-style = "double"
 indent-style = "tab"
+docstring-code-format = true
+
+[tool.ruff.lint]
+select = ["F", "E", "W", "I", "UP", "B"]
+ignore = ["E101", "E402", "E501", "E741", "W191"]
 
 [tool.bench.frappe-dependencies]
 frappe = ">=16.0.0,<17.0.0"

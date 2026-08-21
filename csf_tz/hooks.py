@@ -50,15 +50,11 @@ doctype_js = {
 	"Warehouse": "csf_tz/warehouse.js",
 	"Company": "csf_tz/company.js",
 	"Stock Reconciliation": "csf_tz/stock_reconciliation.js",
-	"Fees": "csf_tz/fees.js",
-	"Program Enrollment Tool": "csf_tz/program_enrollment_tool.js",
 	"Purchase Invoice": "csf_tz/purchase_invoice.js",
 	"Quotation": "csf_tz/quotation.js",
 	"Purchase Receipt": "csf_tz/purchase_receipt.js",
 	"Purchase Order": "csf_tz/purchase_order.js",
-	"Student Applicant": "csf_tz/student_applicant.js",
 	"Bank Reconciliation": "csf_tz/bank_reconciliation.js",
-	"Program Enrollment": "csf_tz/program_enrollment.js",
 	"Payroll Entry": [
 		"csf_tz/payroll_entry.js",
 		"stanbic/payroll_entry.js",
@@ -122,7 +118,6 @@ after_install = [
 
 after_migrate = [
 	"csf_tz.utils.create_custom_fields.execute",
-	"csf_tz.utils.authority_notification_settings_fields.execute",
 	"csf_tz.utils.create_property_setter.execute",
 	"csf_tz.patches.custom_fields.vfd_providers_updated_custom_fields.execute",
 	"csf_tz.patches.migrate_vfd_providers_to_csf_tz.execute",
@@ -201,24 +196,9 @@ doc_events = {
 	"Journal Entry": {
 		"before_save": "csf_tz.csftz_hooks.budget.check_budget_for_journal_entry",
 	},
-	"Fees": {
-		"before_insert": "csf_tz.custom_api.set_fee_abbr",
-		"after_insert": "csf_tz.bank_api.set_callback_token",
-		"on_submit": "csf_tz.bank_api.invoice_submission",
-		"before_cancel": "csf_tz.custom_api.on_cancel_fees",
-	},
-	"Program Enrollment": {
-		"onload": "csf_tz.csftz_hooks.program_enrollment.create_course_enrollments_override",
-		"refresh": "csf_tz.csftz_hooks.program_enrollment.create_course_enrollments_override",
-		"reload": "csf_tz.csftz_hooks.program_enrollment.create_course_enrollments_override",
-		"before_submit": "csf_tz.csftz_hooks.program_enrollment.validate_submit_program_enrollment",
-	},
 	"Stock Entry": {
 		"validate": "csf_tz.custom_api.calculate_total_net_weight",
 		"before_save": "csf_tz.csftz_hooks.stock.import_from_bom",
-	},
-	"Student Applicant": {
-		"on_update_after_submit": "csf_tz.csftz_hooks.student_applicant.make_student_applicant_fees",
 	},
 	"Payroll Entry": {
 		"before_insert": "csf_tz.csftz_hooks.payroll.before_insert_payroll_entry",
@@ -296,7 +276,6 @@ scheduler_events = {
 	},
 	"daily": [
 		"csf_tz.custom_api.create_delivery_note_for_all_pending_sales_invoice",
-		"csf_tz.bank_api.reconciliation",
 		"csf_tz.csftz_hooks.additional_salary.generate_additional_salary_records",
 		"csf_tz.csftz_hooks.exchange_calculations.update_pending_transactions",
 		"csf_tz.csf_tz.doctype.vehicle_sync_task.processor.seed_vehicle_sync_queue",

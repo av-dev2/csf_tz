@@ -3,7 +3,7 @@ import os
 
 import frappe
 
-__version__ = "15.4.0"
+__version__ = "16.4.0"
 
 patches_loaded = False
 app_name = "csf_tz"
@@ -17,6 +17,11 @@ def load_monkey_patches():
 	global patches_loaded
 
 	if patches_loaded:
+		return
+
+	# Site-less contexts (`bench build`, etc.) must not force a DB
+	# connection; the frappe.connect patch loads these later anyway.
+	if not getattr(frappe.local, "site", None):
 		return
 
 	patches_loaded = True

@@ -1,5 +1,3 @@
-from __future__ import unicode_literals
-
 import base64
 import io
 import json
@@ -82,11 +80,11 @@ def print_out(message: Any, alert: Any = False, add_traceback: Any = False, to_e
 
 def get_stock_ledger_entries(item_code):
 	if get_version() == 12:
-		conditions = " and sle.item_code = '%s'" % item_code
+		conditions = f" and sle.item_code = '{item_code}'"
 	else:
-		conditions = " and sle.is_cancelled = 0 and sle.item_code = '%s'" % item_code
+		conditions = f" and sle.is_cancelled = 0 and sle.item_code = '{item_code}'"
 	return frappe.db.sql(
-		"""
+		f"""
         select sle.batch_no, sle.item_code, sle.warehouse, sle.qty_after_transaction as actual_qty
             from `tabStock Ledger Entry` sle
             inner join (
@@ -97,9 +95,8 @@ def get_stock_ledger_entries(item_code):
                 and sle.item_code = sle_max.item_code
                 and sle.warehouse = sle_max.warehouse
                 and sle.posting_datetime = sle_max.posting_datetime
-        where sle.docstatus = 1 %s
-        order by sle.warehouse, sle.item_code, sle.batch_no"""
-		% conditions,
+        where sle.docstatus = 1 {conditions}
+        order by sle.warehouse, sle.item_code, sle.batch_no""",
 		as_dict=1,
 	)
 
@@ -119,9 +116,7 @@ def get_app_branch(app):
 	import subprocess
 
 	try:
-		branch = subprocess.check_output(
-			"cd ../apps/{0} && git rev-parse --abbrev-ref HEAD".format(app), shell=True
-		)
+		branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=f"../apps/{app}")
 		branch = branch.decode("utf-8")
 		branch = branch.strip()
 		return branch
@@ -167,32 +162,29 @@ def get_item_info(item_code: Any):
 
 @frappe.whitelist()
 def get_item_prices(item_code: Any, currency: Any, customer: Any = None, company: Any = None):
-	item_code = "'{0}'".format(item_code)
-	currency = "'{0}'".format(currency)
+	item_code = f"'{item_code}'"
+	currency = f"'{currency}'"
 	unique_records = int(frappe.db.get_single_value("CSF TZ Settings", "unique_records"))
 	prices_list = []
 	unique_price_list = []
 	max_records = frappe.db.get_value("Company", company, "max_records_in_dialog") or 20
 	if customer:
-		conditions = " and SI.customer = '%s'" % customer
+		conditions = f" and SI.customer = '{customer}'"
 	else:
 		conditions = ""
 
-	query = (
-		""" SELECT SI.name, SI.posting_date, SI.customer, SIT.item_code, SIT.qty, SIT.rate
+	query = f""" SELECT SI.name, SI.posting_date, SI.customer, SIT.item_code, SIT.qty, SIT.rate
             FROM `tabSales Invoice` AS SI
             INNER JOIN `tabSales Invoice Item` AS SIT ON SIT.parent = SI.name
             WHERE
-                SIT.item_code = {0}
+                SIT.item_code = {item_code}
                 AND SIT.parent = SI.name
                 AND SI.docstatus=%s
-                AND SI.currency = {2}
+                AND SI.currency = {currency}
                 AND SI.is_return != 1
-                AND SI.company = '{3}'
-                {1}
-            ORDER by SI.posting_date DESC""".format(item_code, conditions, currency, company)
-		% (1)
-	)
+                AND SI.company = '{company}'
+                {conditions}
+            ORDER by SI.posting_date DESC""" % (1)
 
 	items = frappe.db.sql(query, as_dict=True)
 	for item in items:
@@ -229,8 +221,8 @@ def get_item_prices_custom(filters: Any = None, start: Any = 0, limit: Any = 20)
 	unique_records = int(frappe.db.get_single_value("CSF TZ Settings", "unique_records"))
 	customer = filters.get("customer", "")
 	company = filters.get("company", "")
-	item_code = "'{0}'".format(filters.get("item_code", ""))
-	currency = "'{0}'".format(filters.get("currency", ""))
+	item_code = "'{}'".format(filters.get("item_code", ""))
+	currency = "'{}'".format(filters.get("currency", ""))
 	prices_list = []
 	unique_price_list = []
 	max_records = int(start) + int(limit)
@@ -238,28 +230,26 @@ def get_item_prices_custom(filters: Any = None, start: Any = 0, limit: Any = 20)
 
 	if "posting_date" in filters:
 		posting_date = filters["posting_date"]
-		from_date = "'{from_date}'".format(from_date=posting_date[1][0])
-		to_date = "'{to_date}'".format(to_date=posting_date[1][1])
-		conditions += "AND DATE(SI.posting_date) BETWEEN {start} AND {end}".format(
-			start=from_date, end=to_date
-		)
+		from_date = f"'{posting_date[1][0]}'"
+		to_date = f"'{posting_date[1][1]}'"
+		conditions += f"AND DATE(SI.posting_date) BETWEEN {from_date} AND {to_date}"
 	if customer:
-		conditions += " AND SI.customer = '%s'" % customer
+		conditions += f" AND SI.customer = '{customer}'"
 
 	# TODO: refactor to parameterized query; inputs are pre-quoted upstream
 	# nosemgrep: frappe-sql-format-injection
-	query = """ SELECT SI.name, SI.posting_date, SI.customer, SIT.item_code, SIT.qty,  SIT.rate
+	query = f""" SELECT SI.name, SI.posting_date, SI.customer, SIT.item_code, SIT.qty,  SIT.rate
                 FROM `tabSales Invoice` AS SI
                 INNER JOIN `tabSales Invoice Item` AS SIT ON SIT.parent = SI.name
                 WHERE
-                    SIT.item_code = {0}
+                    SIT.item_code = {item_code}
                     AND SIT.parent = SI.name
                     AND SI.docstatus= 1
-                    AND SI.currency = {2}
+                    AND SI.currency = {currency}
                     AND SI.is_return != 1
-                    AND SI.company = '{3}'
-                    {1}
-                ORDER by SI.posting_date DESC""".format(item_code, conditions, currency, company)
+                    AND SI.company = '{company}'
+                    {conditions}
+                ORDER by SI.posting_date DESC"""
 
 	items = frappe.db.sql(query, as_dict=True)
 	for item in items:
@@ -472,15 +462,6 @@ def delete_doc(doctype, docname):
 		frappe.msgprint(_("{0} {1} is Deleted").format("Stock Entry", doc.name))
 
 
-def on_cancel_fees(doc, method):
-	from erpnext.accounts.utils import unlink_ref_doc_from_payment_entries
-
-	unlink_ref_doc_from_payment_entries(doc)
-	from csf_tz.bank_api import cancel_invoice
-
-	cancel_invoice(doc, "before_cancel")
-
-
 def check_validate_delivery_note(doc=None, method=None, doc_name=None):
 	if not doc and doc_name:
 		doc = frappe.get_doc("Sales Invoice", doc_name)
@@ -565,16 +546,13 @@ def update_delivery_on_sales_invoice(doc, method):
 
 
 def get_delivery_note_item_count(item_row_name, sales_invoice):
-	query = """ SELECT SUM(stock_qty) as cont
+	query = f""" SELECT SUM(stock_qty) as cont
             FROM `tabDelivery Note Item`
             WHERE
-                si_detail = '%s'
+                si_detail = '{item_row_name}'
                 AND docstatus != 2
-                AND against_sales_invoice = '%s'
-            """ % (
-		item_row_name,
-		sales_invoice,
-	)
+                AND against_sales_invoice = '{sales_invoice}'
+            """
 
 	counts = frappe.db.sql(query, as_dict=True)
 	if len(counts) > 0 and counts[0]["cont"]:
@@ -590,21 +568,19 @@ def get_pending_sales_invoice(*args):
 	page_length = cint(args[4])
 	conditions = ""
 	if args[1] != "":
-		conditions += " AND SI.name = '%s'" % args[1]
+		conditions += f" AND SI.name = '{args[1]}'"
 	if "posting_date" in filters:
 		posting_date = filters["posting_date"]
-		from_date = "'{from_date}'".format(from_date=posting_date[1][0])
-		to_date = "'{to_date}'".format(to_date=posting_date[1][1])
-		conditions += "AND DATE(SI.posting_date) BETWEEN {start} AND {end}".format(
-			start=from_date, end=to_date
-		)
+		from_date = f"'{posting_date[1][0]}'"
+		to_date = f"'{posting_date[1][1]}'"
+		conditions += f"AND DATE(SI.posting_date) BETWEEN {from_date} AND {to_date}"
 	if "customer" in filters:
-		conditions += " AND SI.customer = '%s'" % filters["customer"]
+		conditions += " AND SI.customer = '{}'".format(filters["customer"])
 	if "company" in filters:
-		conditions += " AND SI.company = '%s'" % filters["company"]
+		conditions += " AND SI.company = '{}'".format(filters["company"])
 	if "set_warehouse" in filters:
-		conditions += " AND SIT.warehouse = '%s'" % filters["set_warehouse"]
-	query = """
+		conditions += " AND SIT.warehouse = '{}'".format(filters["set_warehouse"])
+	query = f"""
             WITH CTE AS(
                 SELECT
                     SIT.stock_qty,
@@ -626,18 +602,14 @@ def get_pending_sales_invoice(*args):
                     AND SI.is_return = 0
                     AND SI.status NOT IN ("Credit Note Issued", "Internal Transfer")
                     AND SIT.stock_qty != SIT.delivered_qty
-                    %s
+                    {conditions}
                 GROUP BY SI.name, SIT.name
                 HAVING SIT.stock_qty > DNI_sum_stock_qty
             )
             SELECT * FROM `CTE` WHERE RN = 1
-            LIMIT %s
-            OFFSET %s
-            """ % (
-		conditions,
-		page_length,
-		start,
-	)
+            LIMIT {page_length}
+            OFFSET {start}
+            """
 	data = frappe.db.sql(query, as_dict=True)
 	return data
 
@@ -645,10 +617,10 @@ def get_pending_sales_invoice(*args):
 def get_list_pending_sales_invoice(invoice_name=None, warehouse=None):
 	conditions = ""
 	if invoice_name:
-		conditions += " AND SI.name = '%s'" % invoice_name
+		conditions += f" AND SI.name = '{invoice_name}'"
 	if warehouse:
-		conditions += " AND SIT.warehouse = '%s'" % warehouse
-	query = """
+		conditions += f" AND SIT.warehouse = '{warehouse}'"
+	query = f"""
             WITH CTE AS(
                 SELECT
                     SIT.stock_qty,
@@ -670,12 +642,12 @@ def get_list_pending_sales_invoice(invoice_name=None, warehouse=None):
                     AND SI.update_stock != 1
                     AND SIT.stock_qty != SIT.delivered_qty
                     AND SI.enabled_auto_create_delivery_notes = 1
-                    %s
+                    {conditions}
                 GROUP BY SI.name, SIT.name
                 HAVING SIT.stock_qty > DNI_sum_stock_qty
             )
             SELECT * FROM `CTE` WHERE RN = 1
-            """ % (conditions)
+            """
 	data = frappe.db.sql(query, as_dict=True)
 	return data
 
@@ -795,7 +767,7 @@ def make_stock_reconciliation_for_all_pending_material_request(*args):
 				data[mat_req_doc.company][item.warehouse].append(item_dict)
 
 	for key, value in data.items():
-		for key1, value1 in value.items():
+		for _key1, value1 in value.items():
 			if len(value1) > 0:
 				items_list = []
 				items = []
@@ -1006,79 +978,6 @@ def make_withholding_tax_gl_entries_for_purchase(doc: Any, method: Any):
 		frappe.msgprint(
 			_("Journal Entry Created for Withholding Tax <a href='{0}'>{1}</a>").format(jv_url, jv_doc.name)
 		)
-
-
-@frappe.whitelist()
-def set_fee_abbr(doc: Any = None, method: Any = None):
-	doc.company = frappe.get_value("Fee Structure", doc.fee_structure, "company")
-	send_fee_details_to_bank = frappe.get_value("Company", doc.company, "send_fee_details_to_bank") or 0
-	if not send_fee_details_to_bank:
-		return
-	doc.abbr = frappe.get_value("Company", doc.company, "abbr")
-
-
-@frappe.whitelist()
-def enroll_all_students(self):
-	"""Enrolls students or applicants.
-
-	:param self: Program Enrollment Tool
-
-	This is created to allow enqueue of students creation.
-	The default enroll process fails when there are too many enrollments to do at a go
-	"""
-	import json
-
-	self = json.loads(self)
-	self = frappe.get_doc(dict(self))
-
-	if self.get_students_from == "Student Applicant":
-		frappe.msgprint(_("Remove student applicants that are already created"))
-
-	if len(self.students) > 30:
-		frappe.enqueue("csf_tz.custom_api.enroll_students", self=self)
-		return "queued"
-	else:
-		enroll_students(self=self)
-		return len(self.students)
-
-
-@frappe.whitelist()
-def enroll_students(self):
-	"""Enrolls students or applicants.
-
-	:param self: Program Enrollment Tool
-
-	This is a copy of ERPNext function meant to allow loading from custom doctypes and frappe.enqueue
-	Used in csf_tz.custom_api.enroll_students
-	"""
-	from education.education.api import enroll_student
-
-	total = len(self.students)
-	for i, stud in enumerate(self.students):
-		frappe.publish_realtime(
-			"program_enrollment_tool",
-			dict(progress=[i + 1, total]),
-			user=frappe.session.user,
-		)
-		if stud.student:
-			prog_enrollment = frappe.new_doc("Program Enrollment")
-			prog_enrollment.student = stud.student
-			prog_enrollment.student_name = stud.student_name
-			prog_enrollment.program = self.new_program
-			prog_enrollment.academic_year = self.new_academic_year
-			prog_enrollment.academic_term = self.new_academic_term
-			prog_enrollment.student_batch_name = (
-				stud.student_batch_name if stud.student_batch_name else self.new_student_batch
-			)
-			prog_enrollment.save()
-		elif stud.student_applicant:
-			prog_enrollment = enroll_student(stud.student_applicant)
-			prog_enrollment.academic_year = self.academic_year
-			prog_enrollment.academic_term = self.academic_term
-			prog_enrollment.student_batch_name = (
-				stud.student_batch_name if stud.student_batch_name else self.new_student_batch
-			)
-			prog_enrollment.save()
 
 
 @frappe.whitelist()
@@ -1390,14 +1289,8 @@ def allocate_batches_for_single_items(doc, items, warehouse, fields_to_clear):
 
 			if b_qty < row.qty:
 				frappe.throw(
-					"Qty: {0} available for item: {1} on warehouse: {2} is not enough to complete requested Qty: {3}<br>\
-                Please update sales order: {4} to match the Qty available on stock".format(
-						frappe.bold(b_qty),
-						frappe.bold(row.item_code),
-						frappe.bold(warehouse),
-						frappe.bold(row.qty),
-						frappe.bold(row.parent),
-					)
+					f"Qty: {frappe.bold(b_qty)} available for item: {frappe.bold(row.item_code)} on warehouse: {frappe.bold(warehouse)} is not enough to complete requested Qty: {frappe.bold(row.qty)}<br>\
+                Please update sales order: {frappe.bold(row.parent)} to match the Qty available on stock"
 				)
 
 		else:
@@ -2149,8 +2042,8 @@ def get_item_prices_custom_po(filters: Any = None, start: Any = 0, limit: Any = 
 	unique_records = int(frappe.db.get_single_value("CSF TZ Settings", "unique_records"))
 	customer = filters.get("customer", "")
 	company = filters.get("company", "")
-	item_code = "'{0}'".format(filters.get("item_code", ""))
-	currency = "'{0}'".format(filters.get("currency", ""))
+	item_code = "'{}'".format(filters.get("item_code", ""))
+	currency = "'{}'".format(filters.get("currency", ""))
 	prices_list = []
 	unique_price_list = []
 	max_records = int(start) + int(limit)
@@ -2158,28 +2051,26 @@ def get_item_prices_custom_po(filters: Any = None, start: Any = 0, limit: Any = 
 
 	if "posting_date" in filters:
 		posting_date = filters["posting_date"]
-		from_date = "'{from_date}'".format(from_date=posting_date[1][0])
-		to_date = "'{to_date}'".format(to_date=posting_date[1][1])
-		conditions += "AND DATE(PI.posting_date) BETWEEN {start} AND {end}".format(
-			start=from_date, end=to_date
-		)
+		from_date = f"'{posting_date[1][0]}'"
+		to_date = f"'{posting_date[1][1]}'"
+		conditions += f"AND DATE(PI.posting_date) BETWEEN {from_date} AND {to_date}"
 	if customer:
-		conditions += " AND PI.supplier = '%s'" % customer
+		conditions += f" AND PI.supplier = '{customer}'"
 
 	# TODO: refactor to parameterized query; inputs are pre-quoted upstream
 	# nosemgrep: frappe-sql-format-injection
-	query = """ SELECT PI.name, PI.posting_date, PI.supplier, PIT.item_code, PIT.qty,  PIT.rate
+	query = f""" SELECT PI.name, PI.posting_date, PI.supplier, PIT.item_code, PIT.qty,  PIT.rate
                 FROM `tabPurchase Invoice` AS PI
                 INNER JOIN `tabPurchase Invoice Item` AS PIT ON PIT.parent = PI.name
                 WHERE
-                    PIT.item_code = {0}
+                    PIT.item_code = {item_code}
                     AND PIT.parent = PI.name
                     AND PI.docstatus= 1
-                    AND PI.currency = {2}
+                    AND PI.currency = {currency}
                     AND PI.is_return != 1
-                    AND PI.company = '{3}'
-                    {1}
-                ORDER by PI.posting_date DESC""".format(item_code, conditions, currency, company)
+                    AND PI.company = '{company}'
+                    {conditions}
+                ORDER by PI.posting_date DESC"""
 
 	items = frappe.db.sql(query, as_dict=True)
 	for item in items:
@@ -2202,32 +2093,29 @@ def get_item_prices_custom_po(filters: Any = None, start: Any = 0, limit: Any = 
 
 @frappe.whitelist()
 def get_item_prices_po(item_code: Any, currency: Any, customer: Any = None, company: Any = None):
-	item_code = "'{0}'".format(item_code)
-	currency = "'{0}'".format(currency)
+	item_code = f"'{item_code}'"
+	currency = f"'{currency}'"
 	unique_records = int(frappe.db.get_single_value("CSF TZ Settings", "unique_records"))
 	prices_list = []
 	unique_price_list = []
 	max_records = frappe.db.get_value("Company", company, "max_records_in_dialog") or 20
 	if customer:
-		conditions = " and PI.supplier = '%s'" % customer
+		conditions = f" and PI.supplier = '{customer}'"
 	else:
 		conditions = ""
 
-	query = (
-		""" SELECT PI.name, PI.posting_date, PI.supplier, PIT.item_code, PIT.qty, PIT.rate
+	query = f""" SELECT PI.name, PI.posting_date, PI.supplier, PIT.item_code, PIT.qty, PIT.rate
             FROM `tabPurchase Invoice` AS PI
             INNER JOIN `tabPurchase Invoice Item` AS PIT ON PIT.parent = PI.name
             WHERE
-                PIT.item_code = {0}
+                PIT.item_code = {item_code}
                 AND PIT.parent = PI.name
                 AND PI.docstatus=%s
-                AND PI.currency = {2}
+                AND PI.currency = {currency}
                 AND PI.is_return != 1
-                AND PI.company = '{3}'
-                {1}
-            ORDER by PI.posting_date DESC""".format(item_code, conditions, currency, company)
-		% (1)
-	)
+                AND PI.company = '{company}'
+                {conditions}
+            ORDER by PI.posting_date DESC""" % (1)
 
 	items = frappe.db.sql(query, as_dict=True)
 	for item in items:

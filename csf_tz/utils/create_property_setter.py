@@ -58,6 +58,7 @@ def create_property_setter_from_json(property_setters_obj):
 			value=property_setter_dict["value"],
 			property_type=property_setter_dict["property_type"],
 			for_doctype=for_doctype,
+			validate_fields_for_doctype=False,
 		)
 
 

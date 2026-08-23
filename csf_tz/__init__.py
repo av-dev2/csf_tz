@@ -19,6 +19,11 @@ def load_monkey_patches():
 	if patches_loaded:
 		return
 
+	# Site-less contexts (`bench build`, etc.) must not force a DB
+	# connection; the frappe.connect patch loads these later anyway.
+	if not getattr(frappe.local, "site", None):
+		return
+
 	patches_loaded = True
 
 	if app_name not in frappe.get_installed_apps():

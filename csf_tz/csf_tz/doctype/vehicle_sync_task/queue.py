@@ -3,10 +3,11 @@ import frappe
 BATCH_SIZE = 1
 SUCCESS_INTERVAL_SECONDS = 60 * 60 * 24
 MAX_CALLS_PER_MINUTE = 1
-WORKER_ID = frappe.local.site
+
 
 def _now():
-    return frappe.utils.now_datetime()
+	return frappe.utils.now_datetime()
+
 
 def claim_batch(doctype, limit=BATCH_SIZE):
     try:
@@ -62,22 +63,27 @@ def claim_batch(doctype, limit=BATCH_SIZE):
         return []
 
 def mark_done(doctype, task):
-    try:
-        frappe.db.set_value(doctype, task["name"], {
-            "status": "Pending",
-            "attempts": 0,
-            "backoff_exp": 0,
-            "last_run_at": _now(),
-            "claimed_by": "",
-            "claimed_at": None,
-            "next_run_at": frappe.utils.add_to_date(_now(), seconds=SUCCESS_INTERVAL_SECONDS),
-            "last_error": ""
-        })
-    except Exception as e:
-        frappe.log_error(
-            title="Queue Mark Done Failed",
-            message=f"Error marking task {task.get('name')} as done in {doctype}: {str(e)}"
-        )
+	try:
+		frappe.db.set_value(
+			doctype,
+			task["name"],
+			{
+				"status": "Pending",
+				"attempts": 0,
+				"backoff_exp": 0,
+				"last_run_at": _now(),
+				"claimed_by": "",
+				"claimed_at": None,
+				"next_run_at": frappe.utils.add_to_date(_now(), seconds=SUCCESS_INTERVAL_SECONDS),
+				"last_error": "",
+			},
+		)
+	except Exception as e:
+		frappe.log_error(
+			title="Queue Mark Done Failed",
+			message=f"Error marking task {task.get('name')} as done in {doctype}: {str(e)}",
+		)
+
 
 def mark_failed(doctype, task, err_msg):
     try:
@@ -99,30 +105,29 @@ def mark_failed(doctype, task, err_msg):
         )
 
 def reset_stuck_tasks(doctype, timeout_minutes=10):
-    try:
-        timeout_time = frappe.utils.add_to_date(_now(), minutes=-timeout_minutes)
-        Task = frappe.qb.DocType(doctype)
-        stuck = (
-            frappe.qb.from_(Task)
-            .select(Task.name)
-            .where(
-                (Task.status == "Processing") &
-                (Task.claimed_at < timeout_time) &
-                ((Task.is_deleted.isnull()) | (Task.is_deleted == 0))  # ← IGNORE DELETED TASKS
-            )
-        ).run(as_dict=True)
+	try:
+		timeout_time = frappe.utils.add_to_date(_now(), minutes=-timeout_minutes)
+		Task = frappe.qb.DocType(doctype)
+		stuck = (
+			frappe.qb.from_(Task)
+			.select(Task.name)
+			.where(
+				(Task.status == "Processing")
+				& (Task.claimed_at < timeout_time)
+				& ((Task.is_deleted.isnull()) | (Task.is_deleted == 0))  # ← IGNORE DELETED TASKS
+			)
+		).run(as_dict=True)
 
-        for row in stuck:
-            frappe.db.set_value(doctype, row["name"], {
-                "status": "Pending",
-                "claimed_by": "",
-                "claimed_at": None,
-                "next_run_at": _now()
-            })
-        return len(stuck)
-    except Exception as e:
-        frappe.log_error(
-            title="Queue Reset Stuck Tasks Failed",
-            message=f"Error resetting stuck tasks in {doctype}: {str(e)}"
-        )
-        return 0
+		for row in stuck:
+			frappe.db.set_value(
+				doctype,
+				row["name"],
+				{"status": "Pending", "claimed_by": "", "claimed_at": None, "next_run_at": _now()},
+			)
+		return len(stuck)
+	except Exception as e:
+		frappe.log_error(
+			title="Queue Reset Stuck Tasks Failed",
+			message=f"Error resetting stuck tasks in {doctype}: {str(e)}",
+		)
+		return 0

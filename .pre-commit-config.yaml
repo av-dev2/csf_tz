@@ -1,4 +1,4 @@
-exclude: 'node_modules|.git'
+exclude: 'node_modules|.git|frappe-semgrep-rules'
 default_stages: [pre-commit]
 default_install_hook_types: [pre-commit, commit-msg]
 fail_fast: false
@@ -11,6 +11,7 @@ repos:
         files: "csf_tz.*"
         exclude: ".*json$|.*txt$|.*csv|.*md|.*svg"
       - id: end-of-file-fixer
+        exclude: ".*json$"
       - id: check-merge-conflict
       - id: check-ast
       - id: check-json
@@ -19,7 +20,7 @@ repos:
       - id: debug-statements
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.1
+    rev: v0.11.0
     hooks:
       - id: ruff
         name: "Run ruff import sorter"
@@ -27,9 +28,22 @@ repos:
 
       - id: ruff
         name: "Run ruff linter"
+        args: ["--fix"]
 
       - id: ruff-format
         name: "Run ruff formatter"
+
+  - repo: local
+    hooks:
+      - id: frappe-semgrep-rules
+        name: "Frappe Semgrep Security Rules"
+        entry: bash -c 'if [ ! -d frappe-semgrep-rules/.git ]; then rm -rf frappe-semgrep-rules && GIT_TEMPLATE_DIR="" git clone --depth 1 https://github.com/frappe/semgrep-rules.git frappe-semgrep-rules; fi && semgrep scan --config ./frappe-semgrep-rules/rules --config r/python.lang.security --severity=ERROR --error --quiet "$@"' --
+        language: python
+        additional_dependencies: ["semgrep"]
+        types: [python]
+        files: "^csf_tz/.*\\.py$"
+        pass_filenames: true
+        require_serial: true
 
   - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
     rev: v9.22.0
@@ -40,5 +54,5 @@ repos:
 
 ci:
     autoupdate_schedule: weekly
-    skip: []
+    skip: [frappe-semgrep-rules]
     submodules: false

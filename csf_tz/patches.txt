@@ -24,3 +24,4 @@ csf_tz.patches.migrate_vfd_providers_to_csf_tz
 execute:frappe.delete_doc_if_exists("Report", "Stock Ledger Mismatch")
 csf_tz.patches.remove_ot_component_custom_fields
 csf_tz.patches.remove_deleted_modules_metadata
+csf_tz.patches.remove_education_doctypes

@@ -5,7 +5,6 @@ import frappe
 import os
 from frappe.utils.background_jobs import enqueue
 from frappe.utils.pdf import get_pdf, cleanup
-from PyPDF2 import PdfFileWriter
 from csf_tz import console
 
 

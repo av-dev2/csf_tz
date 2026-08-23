@@ -19,10 +19,16 @@ def load_monkey_patches():
 	if patches_loaded:
 		return
 
-	patches_loaded = True
+	# Bench-level commands such as asset builds can run without a site context.
+	# Avoid querying installed apps in that case, because it attempts a database
+	# connection and fails with "site must be fully initialized, db_name missing".
+	if not getattr(frappe.local, "site", None):
+		return
 
 	if app_name not in frappe.get_installed_apps():
 		return
+
+	patches_loaded = True
 
 	for module_name in os.listdir(frappe.get_app_path(app_name, "monkey_patches")):
 		if not module_name.endswith(".py") or module_name == "__init__.py":

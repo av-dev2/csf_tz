@@ -59,3 +59,6 @@ build/
 coverage/
 *.lcov
 .nyc_output
+
+# Semgrep rules cloned by pre-commit / CI
+frappe-semgrep-rules/

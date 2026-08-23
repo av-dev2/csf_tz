@@ -31,7 +31,7 @@
   },
   {
     "doctype": "Account",
-    "account_name": "Bank Charges",
+    "account_name": "Bank Charges Accounts",
     "company": "{company}",
     "account_currency": "TZS",
     "parent_account": "Financial Charges - {abbr}",
@@ -147,7 +147,7 @@
     "account_name": "Bank Charges TZS",
     "company": "{company}",
     "account_currency": "TZS",
-    "parent_account": "Bank Charges - {abbr}",
+    "parent_account": "Bank Charges Accounts - {abbr}",
     "root_type": "Expense",
     "report_type": "Profit and Loss"
   },

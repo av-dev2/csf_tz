@@ -11,6 +11,8 @@ def execute(filters=None):
 	sales_label = {"details": "Sales - Sales Returns"}
 	totals = {}
 	generate_sales_returns(filters, data, totals, sales_label)
+	if not totals:
+		return columns, data
 	data[0]["std_sales"] = fmt_money(float(totals["total_std_sales"]), 2, data[1]["invoice_currency"])
 	data[0]["vat"] = fmt_money(float(totals["vat"]), 2, data[1]["invoice_currency"])
 	data[0]["ex_amount"] = fmt_money(float(totals["ex_amount"]), 2, data[1]["invoice_currency"])
@@ -34,10 +36,9 @@ def generate_credit_note(data, totals, credit_note_label):
 		if data[i]["details"] != "Credit Note - Sales Returns":
 			credit_notes = frappe.get_list(
 				"Sales Invoice",
-				filters={"is_return": 1, "return_against": "ACC-SINV-2019-07382", "docstatus": 1},
+				filters={"is_return": 1, "return_against": data[i]["details"], "docstatus": 1},
 				fields=["*"],
 			)
-			print(credit_notes)
 			for ii in credit_notes:
 				if i == 1:
 					data.append(credit_note_label)
@@ -79,11 +80,16 @@ def generate_credit_note(data, totals, credit_note_label):
 
 
 def generate_sales_returns(filters, data, totals, sales_label):
-	efd_z_report_invoices = frappe.get_list(
-		"EFD Z Report Invoice", filters={"parent": filters.get("efd_report")}, fields=["*"]
+	efd_z_report_invoices = frappe.get_all(
+		"EFD Z Report Invoice",
+		filters={"parent": filters.get("efd_report"), "parenttype": "EFD Z Report"},
+		fields=["invoice_number"],
+		parent_doctype="EFD Z Report",
+		order_by="idx",
 	)
 	for idx, i in enumerate(efd_z_report_invoices):
 		sales_invoice = frappe.get_doc("Sales Invoice", i.invoice_number).__dict__
+		i.invoice_currency = sales_invoice["currency"]
 		if idx == 0:
 			data.append(sales_label)
 		totals["total_std_sales"] = (

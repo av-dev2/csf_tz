@@ -4,6 +4,7 @@ from io import BytesIO
 import frappe
 from frappe import _
 from frappe.model.workflow import apply_workflow
+from frappe.query_builder.functions import Sum
 from frappe.utils import flt
 from frappe.utils.background_jobs import enqueue
 from PyPDF3 import PdfFileReader, PdfFileWriter
@@ -52,10 +53,11 @@ def before_cancel_payroll_entry(doc, method):
 			jv_doc = frappe.get_doc("Journal Entry", journal_entry)
 			if jv_doc.docstatus == 1:
 				jv_doc.cancel()
-			jv_doc.delete()
+			else:
+				jv_doc.delete()
 		except Exception:
 			traceback = frappe.get_traceback()
-			title = _(f"Error for Journal Entry: <b>{jv_doc.name}</b>")
+			title = _(f"Error for Journal Entry: <b>{journal_entry}</b>")
 			frappe.log_error(traceback, title)
 			return
 
@@ -290,6 +292,7 @@ def enqueue_apply_workflow_for_salary_slips(kwargs):
 
 @frappe.whitelist()
 def get_amounts_summary(payroll_entry):
+	frappe.has_permission("Payroll Entry", "read", payroll_entry, throw=True)
 	summary = {
 		"gross_pay": 0.0,
 		"net_pay": 0.0,
@@ -322,16 +325,7 @@ def get_amounts_summary(payroll_entry):
 	totals_map = {}
 
 	if slip_names and component_names:
-		component_totals = frappe.get_all(
-			"Salary Detail",
-			filters={
-				"parent": ("in", slip_names),
-				"salary_component": ("in", component_names),
-			},
-			fields=["salary_component", "sum(amount) as total"],
-			group_by="salary_component",
-		)
-		totals_map = {row.salary_component: flt(row.total) for row in component_totals}
+		totals_map = get_component_totals(slip_names, component_names)
 
 	for component in tracked_components:
 		summary["components"].append(
@@ -343,3 +337,14 @@ def get_amounts_summary(payroll_entry):
 		)
 
 	return summary
+
+
+def get_component_totals(slip_names, component_names):
+	detail = frappe.qb.DocType("Salary Detail")
+	rows = (
+		frappe.qb.from_(detail)
+		.select(detail.salary_component, Sum(detail.amount).as_("total"))
+		.where(detail.parent.isin(slip_names) & detail.salary_component.isin(component_names))
+		.groupby(detail.salary_component)
+	).run(as_dict=True)
+	return {row.salary_component: flt(row.total) for row in rows}

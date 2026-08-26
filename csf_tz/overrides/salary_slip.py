@@ -25,13 +25,13 @@ class SalarySlip(_SalarySlip):
 		self.payment_days = min(fixed_working_days, self.payment_days)
 		return result
 
-	def calculate_lwp_or_ppl_based_on_leave_application(self, holidays, working_days, *args, **kwargs):
+	def calculate_lwp_or_ppl_based_on_leave_application(self, holidays, working_days_list, *args, **kwargs):
 		fixed_working_days = get_fixed_working_days()
 		if fixed_working_days is not None:
-			working_days = min(fixed_working_days, working_days)
+			working_days_list = working_days_list[:fixed_working_days]
 
 		return super().calculate_lwp_or_ppl_based_on_leave_application(
-			holidays, working_days, *args, **kwargs
+			holidays, working_days_list, *args, **kwargs
 		)
 
 	def get_payment_days(self, *args, **kwargs):
@@ -70,7 +70,7 @@ class SalarySlip(_SalarySlip):
 				"reference_doctype": self.doctype,
 				"reference_name": self.name,
 			}
-			if not frappe.flags.in_test:
+			if not frappe.in_test:
 				enqueue(
 					method=frappe.sendmail,
 					queue="short",

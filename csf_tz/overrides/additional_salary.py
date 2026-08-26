@@ -13,6 +13,12 @@ class AdditionalSalary(_AdditionalSalary):
 		self.validate_salary_structure()
 		self.validate_recurring_additional_salary_overlap()
 		self.validate_employee_referral()
+		self.validate_duplicate_additional_salary()
+		self.validate_tax_component_overwrite()
+		self.validate_accrual_component()
+
+		if self.ref_doctype == "Employee Advance":
+			self.validate_employee_advance_return()
 
 		allow_negative = frappe.db.get_value(
 			"Salary Component",

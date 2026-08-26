@@ -1,0 +1,26 @@
+[
+ {
+  "dt": "Payroll Entry",
+  "fieldname": "bank_payment_details",
+  "fieldtype": "Section Break",
+  "insert_after": "payroll_payable_account",
+  "label": "Bank Payment Details",
+  "name": "Payroll Entry-bank_payment_details"
+ },
+ {
+  "dt": "Payroll Entry",
+  "fieldname": "cheque_number",
+  "fieldtype": "Data",
+  "insert_after": "bank_payment_details",
+  "label": "Cheque Number",
+  "name": "Payroll Entry-cheque_number"
+ },
+ {
+  "dt": "Payroll Entry",
+  "fieldname": "cheque_date",
+  "fieldtype": "Date",
+  "insert_after": "cheque_number",
+  "label": "Cheque Date",
+  "name": "Payroll Entry-cheque_date"
+ }
+]

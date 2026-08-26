@@ -3,12 +3,10 @@ frappe.require([
     '/assets/csf_tz/js/shortcuts.js'
 ]);
 
-frappe.ui.form.on("Sales Order", {
-    // preload settings as a Promise
-    onload: function (frm) {
+function csf_settings(frm) {
+    if (!frm._csf_settings_promise) {
         frm._csf_settings_promise = (async () => {
             try {
-                // Fetch both fields in one go
                 const limit = await frappe.db.get_single_value(
                     "CSF TZ Settings",
                     "limit_uom_as_item_uom"
@@ -27,9 +25,16 @@ frappe.ui.form.on("Sales Order", {
                 return {};
             }
         })();
+    }
+    return frm._csf_settings_promise;
+}
+
+frappe.ui.form.on("Sales Order", {
+    onload: function (frm) {
+        csf_settings(frm);
     },
     refresh: async function (frm) {
-        const settings = await frm._csf_settings_promise;
+        const settings = await csf_settings(frm);
         if (settings.limit_uom_as_item_uom === 1) {
             frm.set_query("uom", "items", function (frm, cdt, cdn) {
                 let row = locals[cdt][cdn];
@@ -45,7 +50,7 @@ frappe.ui.form.on("Sales Order", {
     },
     customer: async function (frm) {
         if (!frm.doc.customer) return;
-        const settings = await frm._csf_settings_promise;
+        const settings = await csf_settings(frm);
         if (settings.show_customer_outstanding_in_sales_order === 1) {
             frappe.call({
                 method: 'csf_tz.csftz_hooks.customer.get_customer_total_unpaid_amount',

@@ -6,6 +6,9 @@ from frappe import _
 
 
 def execute(filters=None):
+	if not frappe.db.exists("DocType", "Customer Loan Assistance"):
+		frappe.throw(_("DocType Customer Loan Assistance is not installed on this site"))
+
 	columns, data = [], []
 
 	columns = [

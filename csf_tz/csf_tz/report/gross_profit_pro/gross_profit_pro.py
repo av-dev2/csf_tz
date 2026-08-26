@@ -13,6 +13,7 @@ from csf_tz import console
 def execute(filters=None):
 	if not filters:
 		filters = frappe._dict()
+	filters.group_by = filters.get("group_by") or "Invoice"
 	filters.currency = frappe.get_cached_value("Company", filters.company, "default_currency")
 
 	gross_profit_data = GrossProfitGenerator(filters)

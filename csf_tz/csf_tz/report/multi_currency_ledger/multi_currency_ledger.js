@@ -161,11 +161,4 @@ frappe.query_reports["Multi-Currency Ledger"] = {
 	]
 }
 
-erpnext.dimension_filters.forEach((dimension) => {
-	frappe.query_reports["Multi-Currency Ledger"].filters.splice(15, 0 ,{
-		"fieldname": dimension["fieldname"],
-		"label": __(dimension["label"]),
-		"fieldtype": "Link",
-		"options": dimension["document_type"]
-	});
-});
+erpnext.utils.add_dimensions("Multi-Currency Ledger", 15);

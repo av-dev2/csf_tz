@@ -54,7 +54,6 @@ doctype_js = {
 	"Quotation": "csf_tz/quotation.js",
 	"Purchase Receipt": "csf_tz/purchase_receipt.js",
 	"Purchase Order": "csf_tz/purchase_order.js",
-	"Bank Reconciliation": "csf_tz/bank_reconciliation.js",
 	"Payroll Entry": [
 		"csf_tz/payroll_entry.js",
 		"stanbic/payroll_entry.js",

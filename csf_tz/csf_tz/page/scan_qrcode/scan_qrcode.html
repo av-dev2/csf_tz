@@ -1,84 +1,32 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script src="https://unpkg.com/html5-qrcode"></script>
-    <title>QR Code Reader</title>
-    <style>
-      #toast {
-        visibility: hidden;
-        max-width: 50%;
-        margin: auto;
-        background-color: #333;
-        text-align: center;
-        border-radius: 2px;
-        padding: 16px;
-        position: absolute;
-        z-index: 1;
-        left: 50%;
-        transform: translate(-50%, 0);
-        font-size: 17px;
-      }
-
-      #toast.show {
-        visibility: visible;
-        -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
-        animation: fadein 0.5s, fadeout 0.5s 2.5s;
-      }
-
-      @-webkit-keyframes fadein {
-        from {
-          top: 0;
-          opacity: 0;
-        }
-        to {
-          top: 30px;
-          opacity: 1;
-        }
-      }
-
-      @keyframes fadein {
-        from {
-          top: 0;
-          opacity: 0;
-        }
-        to {
-          top: 30px;
-          opacity: 1;
-        }
-      }
-
-      @-webkit-keyframes fadeout {
-        from {
-          top: 30px;
-          opacity: 1;
-        }
-        to {
-          top: 0;
-          opacity: 0;
-        }
-      }
-
-      @keyframes fadeout {
-        from {
-          top: 30px;
-          opacity: 1;
-        }
-        to {
-          top: 0;
-          opacity: 0;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <div id="qr-reader" style="width: 500px"></div>
-    <div id="qr-reader-results"></div>
-    <div id="toast"></div>
-    <div id="reader" style="width: 300px; height: 300px"></div>
-    <!-- <button onclick="startScanner()">Start Scanner</button>
-    <button onclick="stopScanner()">Stop Scanner</button> -->
-    <script src="script.js"></script>
-  </body>
-</html>
+<style>
+  #toast {
+    visibility: hidden;
+    max-width: 50%;
+    margin: auto;
+    background-color: #333;
+    color: #fff;
+    text-align: center;
+    border-radius: 2px;
+    padding: 16px;
+    position: absolute;
+    z-index: 1;
+    left: 50%;
+    transform: translate(-50%, 0);
+    font-size: 17px;
+  }
+  #toast.show {
+    visibility: visible;
+    animation: fadein 0.5s, fadeout 0.5s 2.5s;
+  }
+  @keyframes fadein {
+    from { top: 0; opacity: 0; }
+    to { top: 30px; opacity: 1; }
+  }
+  @keyframes fadeout {
+    from { top: 30px; opacity: 1; }
+    to { top: 0; opacity: 0; }
+  }
+</style>
+<div id="qr-reader" style="width: 500px"></div>
+<div id="qr-reader-results"></div>
+<div id="toast"></div>

@@ -8,6 +8,15 @@ app_email = "info@aakvatech.com"
 app_license = "GNU General Public License (v3)"
 required_apps = ["frappe/erpnext"]
 
+add_to_apps_screen = [
+	{
+		"name": app_name,
+		"logo": "/assets/csf_tz/images/tanzania-workspace.png",
+		"title": app_title,
+		"route": "/desk/tanzania",
+	}
+]
+
 
 # Override Document Class
 override_doctype_class = {  # nosemgrep: frappe-semgrep-rules.rules.override-doctype-class

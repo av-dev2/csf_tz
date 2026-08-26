@@ -34,8 +34,7 @@ def create_import_tracker(doc, method):
 		import_tracker.insert()
 		import_tracker.submit()
 
-		# Add custom field reference
-		frappe.db.set_value("Purchase Invoice", doc.name, "foreign_import_tracker", import_tracker.name)
+		doc.db_set("foreign_import_tracker", import_tracker.name)
 
 		frappe.msgprint(
 			_("Foreign Import Transaction {0} created successfully").format(import_tracker.name),
@@ -154,19 +153,7 @@ def link_payment_to_import_tracker(doc, method):
 	if doc.payment_type != "Pay" or doc.party_type != "Supplier":
 		return
 
-	# Find active import trackers for this supplier
-	trackers = frappe.db.sql(
-		"""
-        SELECT name, purchase_invoice, currency, original_exchange_rate, invoice_amount_foreign
-        FROM `tabForeign Import Transaction`
-        WHERE supplier = %s AND status IN ('Active', 'Draft') AND docstatus = 1
-        ORDER BY transaction_date DESC
-    """,
-		doc.party,
-		as_dict=True,
-	)
-
-	for tracker_data in trackers:
+	for tracker_data in get_open_trackers_for_payment(doc):
 		# Check if payment currency matches tracker currency
 		if doc.paid_to_account_currency == tracker_data.currency:
 			try:
@@ -180,13 +167,7 @@ def link_payment_to_import_tracker(doc, method):
 					# Calculate and create exchange difference entry
 					calculate_payment_exchange_difference(tracker_doc, doc, payment_row)
 
-					# Add custom field reference
-					frappe.db.set_value(
-						"Payment Entry",
-						doc.name,
-						"foreign_import_tracker",
-						tracker_doc.name,
-					)
+					doc.db_set("foreign_import_tracker", tracker_doc.name)
 
 				break  # Link to first matching tracker only
 
@@ -196,6 +177,24 @@ def link_payment_to_import_tracker(doc, method):
 					title=f"Error linking payment {doc.name} to tracker {tracker_doc.name}",  # keep short, <140 chars
 					message=frappe.get_traceback(),
 				)
+
+
+def get_open_trackers_for_payment(payment_doc):
+	"""Open trackers of the invoices the payment references, else all open trackers of the supplier."""
+	filters = {"supplier": payment_doc.party, "status": ["in", ["Active", "Draft"]], "docstatus": 1}
+	referenced_invoices = [
+		row.reference_name
+		for row in payment_doc.get("references") or []
+		if row.reference_doctype == "Purchase Invoice"
+	]
+	if referenced_invoices:
+		filters["purchase_invoice"] = ["in", referenced_invoices]
+	return frappe.get_all(
+		"Foreign Import Transaction",
+		filters=filters,
+		fields=["name", "purchase_invoice", "currency"],
+		order_by="transaction_date desc",
+	)
 
 
 def unlink_payment_from_import_tracker(doc, method):
@@ -237,8 +236,7 @@ def calculate_payment_exchange_difference(tracker_doc, payment_doc, payment_row)
 	settings = get_import_settings(tracker_doc.company)
 
 	original_rate = flt(tracker_doc.original_exchange_rate)
-	payment_rate = flt(payment_doc.source_exchange_rate)
-	paid_amount = flt(payment_doc.paid_amount)
+	paid_amount, payment_rate = get_payment_foreign_amount_and_rate(tracker_doc, payment_doc)
 
 	if abs(original_rate - payment_rate) < 0.000001:  # No significant difference
 		return
@@ -262,7 +260,9 @@ def calculate_payment_exchange_difference(tracker_doc, payment_doc, payment_row)
 			f"Payment Exchange {difference_type}",
 		)
 
-	# Add exchange difference entry
+	payment_row.exchange_difference = exchange_diff
+	payment_row.journal_entry_created = 1 if journal_entry else 0
+
 	tracker_doc.add_exchange_difference(
 		"Payment Entry",
 		payment_doc.name,
@@ -273,9 +273,12 @@ def calculate_payment_exchange_difference(tracker_doc, payment_doc, payment_row)
 		journal_entry.name if journal_entry else None,
 	)
 
-	# Update payment row
-	payment_row.exchange_difference = exchange_diff
-	payment_row.journal_entry_created = 1 if journal_entry else 0
+
+def get_payment_foreign_amount_and_rate(tracker_doc, payment_doc):
+	"""Amount and exchange rate of the payment side booked in the tracker currency."""
+	if payment_doc.paid_to_account_currency == tracker_doc.currency:
+		return flt(payment_doc.received_amount), flt(payment_doc.target_exchange_rate)
+	return flt(payment_doc.paid_amount), flt(payment_doc.source_exchange_rate)
 
 
 def calculate_lcv_exchange_difference(tracker_doc, lcv_doc):
@@ -288,8 +291,7 @@ def calculate_lcv_exchange_difference(tracker_doc, lcv_doc):
 	# For LCV, we calculate the impact on inventory valuation
 	original_rate = flt(tracker_doc.original_exchange_rate)
 
-	# Get LCV conversion rate (if available)
-	lcv_rate = flt(lcv_doc.get("conversion_rate", original_rate))
+	lcv_rate = flt(lcv_doc.get("conversion_rate")) or original_rate
 
 	if abs(original_rate - lcv_rate) < 0.000001:
 		return
@@ -359,23 +361,25 @@ def create_exchange_difference_je(tracker_doc, amount, gain_loss_type, reference
 	je.user_remark = f"{description} - {tracker_doc.purchase_invoice}"
 	je.multi_currency = 1
 
-	# Debit entry
+	# Exchange Gain Or Loss vouchers must carry company currency amounts themselves
 	je.append(
 		"accounts",
 		{
 			"account": debit_account,
 			"debit_in_account_currency": amount,
+			"debit": amount,
+			"exchange_rate": 1,
 			"party_type": "Supplier" if is_payable_account(debit_account) else "",
 			"party": tracker_doc.supplier if is_payable_account(debit_account) else "",
 		},
 	)
-
-	# Credit entry
 	je.append(
 		"accounts",
 		{
 			"account": credit_account,
 			"credit_in_account_currency": amount,
+			"credit": amount,
+			"exchange_rate": 1,
 			"party_type": "Supplier" if is_payable_account(credit_account) else "",
 			"party": tracker_doc.supplier if is_payable_account(credit_account) else "",
 		},
@@ -399,7 +403,7 @@ def get_import_settings(company):
 
 
 def get_supplier_payable_account(supplier, company):
-	# Try the current ERPNext field name first
+	"""Party Account of the supplier for the company, else the company default."""
 	payable_account = frappe.db.get_value(
 		"Party Account",
 		{"parenttype": "Supplier", "parent": supplier, "company": company},
@@ -407,13 +411,6 @@ def get_supplier_payable_account(supplier, company):
 	)
 
 	if not payable_account:
-		# Fallback: try the supplier-level field (field name varies by version)
-		payable_account = frappe.db.get_value("Supplier", supplier, "payable_account") or frappe.db.get_value(
-			"Supplier", supplier, "default_payable_account"
-		)
-
-	if not payable_account:
-		# Final fallback: get default payable account from Company
 		payable_account = frappe.db.get_value("Company", company, "default_payable_account")
 
 	return payable_account
@@ -638,13 +635,7 @@ def manually_link_payment_to_tracker(payment_entry_name, tracker_name=None):
 		# Calculate and create exchange difference entry
 		calculate_payment_exchange_difference(tracker_doc, payment_doc, payment_row)
 
-		# Add custom field reference
-		frappe.db.set_value(
-			"Payment Entry",
-			payment_doc.name,
-			"foreign_import_tracker",
-			tracker_doc.name,
-		)
+		payment_doc.db_set("foreign_import_tracker", tracker_doc.name)
 
 		return {"success": f"Payment {payment_doc.name} successfully linked to tracker {tracker_doc.name}"}
 

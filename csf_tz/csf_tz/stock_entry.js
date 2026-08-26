@@ -61,6 +61,7 @@ frappe.ui.form.on("Stock Entry", {
         refresh_field("total_net_weight");
     },
     set_warehouse_options: function (frm) {
+        if (!frm.doc.company) return;
         frappe.call({
             "method": "csf_tz.custom_api.get_warehouse_options",
             "args": { company: frm.doc.company },

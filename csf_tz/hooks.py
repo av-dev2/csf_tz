@@ -187,7 +187,7 @@ doc_events = {
 	},
 	"Purchase Order": {
 		"validate": [
-			"csf_tz.csftz_hooks.budget.check_budget_for_purchase_invoice",
+			"csf_tz.csftz_hooks.budget.check_budget_for_purchase_order",
 		],
 	},
 	"Material Request": {

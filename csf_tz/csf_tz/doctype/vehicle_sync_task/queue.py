@@ -10,57 +10,61 @@ def _now():
 
 
 def claim_batch(doctype, limit=BATCH_SIZE):
-    try:
-        now = _now()
-        Task = frappe.qb.DocType(doctype)
+	try:
+		now = _now()
+		Task = frappe.qb.DocType(doctype)
 
-        rows = (
-            frappe.qb.from_(Task)
-            .select(Task.name)
-            .where(
-                (Task.status == "Pending") &
-                ((Task.next_run_at.isnull()) | (Task.next_run_at <= now)) &
-                ((Task.is_deleted.isnull()) | (Task.is_deleted == 0))
-            )
-            .orderby(Task.priority, order=frappe.qb.terms.Order.desc)
-            .orderby(Task.name)
-            .limit(limit)
-        ).run(as_dict=True)
+		rows = (
+			frappe.qb.from_(Task)
+			.select(Task.name)
+			.where(
+				(Task.status == "Pending")
+				& ((Task.next_run_at.isnull()) | (Task.next_run_at <= now))
+				& ((Task.is_deleted.isnull()) | (Task.is_deleted == 0))
+			)
+			.orderby(Task.priority, order=frappe.qb.terms.Order.desc)
+			.orderby(Task.name)
+			.limit(limit)
+		).run(as_dict=True)
 
-        if not rows:
-            rows = (
-                frappe.qb.from_(Task)
-                .select(Task.name)
-                .where(
-                    (Task.status == "Failed") &
-                    (Task.next_run_at <= now) &
-                    ((Task.is_deleted.isnull()) | (Task.is_deleted == 0))
-                )
-                .orderby(Task.priority, order=frappe.qb.terms.Order.desc)
-                .orderby(Task.name)
-                .limit(limit)
-            ).run(as_dict=True)
+		if not rows:
+			rows = (
+				frappe.qb.from_(Task)
+				.select(Task.name)
+				.where(
+					(Task.status == "Failed")
+					& (Task.next_run_at <= now)
+					& ((Task.is_deleted.isnull()) | (Task.is_deleted == 0))
+				)
+				.orderby(Task.priority, order=frappe.qb.terms.Order.desc)
+				.orderby(Task.name)
+				.limit(limit)
+			).run(as_dict=True)
 
-        if not rows:
-            return []
+		if not rows:
+			return []
 
-        claimed = []
-        for row in rows:
-            frappe.db.set_value(doctype, row["name"], {
-                "status": "Processing",
-                "claimed_by": WORKER_ID,
-                "claimed_at": now,
-                "last_run_at": now,
-            })
-            data = frappe.db.get_value(doctype, row["name"], ["name", "vehicle_no"], as_dict=True)
-            claimed.append(data)
-        return claimed
-    except Exception as e:
-        frappe.log_error(
-            title="Queue Claim Batch Failed",
-            message=f"Error claiming batch from {doctype}: {str(e)}"
-        )
-        return []
+		claimed = []
+		for row in rows:
+			frappe.db.set_value(
+				doctype,
+				row["name"],
+				{
+					"status": "Processing",
+					"claimed_by": WORKER_ID,
+					"claimed_at": now,
+					"last_run_at": now,
+				},
+			)
+			data = frappe.db.get_value(doctype, row["name"], ["name", "vehicle_no"], as_dict=True)
+			claimed.append(data)
+		return claimed
+	except Exception as e:
+		frappe.log_error(
+			title="Queue Claim Batch Failed", message=f"Error claiming batch from {doctype}: {str(e)}"
+		)
+		return []
+
 
 def mark_done(doctype, task):
 	try:
@@ -86,23 +90,24 @@ def mark_done(doctype, task):
 
 
 def mark_failed(doctype, task, err_msg):
-    try:
-        values = {
-            "status": "Failed",
-            "attempts": 0,
-            "backoff_exp": 0,
-            "last_error": err_msg[:1000],
-            "last_run_at": _now(),
-            "claimed_by": "",
-            "claimed_at": None,
-            "next_run_at": _now(),
-        }
-        frappe.db.set_value(doctype, task["name"], values)
-    except Exception as e:
-        frappe.log_error(
-            title="Queue Mark Failed Error",
-            message=f"Error marking task {task.get('name')} as failed in {doctype}: {str(e)}"
-        )
+	try:
+		values = {
+			"status": "Failed",
+			"attempts": 0,
+			"backoff_exp": 0,
+			"last_error": err_msg[:1000],
+			"last_run_at": _now(),
+			"claimed_by": "",
+			"claimed_at": None,
+			"next_run_at": _now(),
+		}
+		frappe.db.set_value(doctype, task["name"], values)
+	except Exception as e:
+		frappe.log_error(
+			title="Queue Mark Failed Error",
+			message=f"Error marking task {task.get('name')} as failed in {doctype}: {str(e)}",
+		)
+
 
 def reset_stuck_tasks(doctype, timeout_minutes=10):
 	try:

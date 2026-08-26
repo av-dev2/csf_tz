@@ -3,32 +3,32 @@
 /* eslint-disable */
 
 frappe.query_reports["Supplier Contacts"] = {
-	"filters": [
+	filters: [
 		{
-			"reqd": 1,
-			"fieldname":"party_type",
-			"label": __("Party Type"),
-			"fieldtype": "Link",
-			"options": "DocType",
-			"get_query": function() {
+			reqd: 1,
+			fieldname: "party_type",
+			label: __("Party Type"),
+			fieldtype: "Link",
+			options: "DocType",
+			get_query: function () {
 				return {
-					"filters": {
-						"name": ["in","Customer,Supplier,Sales Partner"],
-					}
-				}
-			}
+					filters: {
+						name: ["in", "Customer,Supplier,Sales Partner"],
+					},
+				};
+			},
 		},
 		{
-			"fieldname":"party_name",
-			"label": __("Party Name"),
-			"fieldtype": "Dynamic Link",
-			"get_options": function() {
+			fieldname: "party_name",
+			label: __("Party Name"),
+			fieldtype: "Dynamic Link",
+			get_options: function () {
 				let party_type = frappe.query_report_filters_by_name.party_type.get_value();
-				if(!party_type) {
+				if (!party_type) {
 					frappe.throw(__("Please select Party Type first"));
 				}
 				return party_type;
-			}
-		}
-	]
-}
+			},
+		},
+	],
+};

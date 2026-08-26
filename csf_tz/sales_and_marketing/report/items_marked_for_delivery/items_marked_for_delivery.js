@@ -3,23 +3,23 @@
 /* eslint-disable */
 
 var aday = new Date();
-var from_date = aday.toISOString().split('T')[0];
+var from_date = aday.toISOString().split("T")[0];
 aday.setDate(aday.getDate() + 30);
-var to_date = aday.toISOString().split('T')[0];
+var to_date = aday.toISOString().split("T")[0];
 
 frappe.query_reports["Items Marked For Delivery"] = {
-	"filters": [
+	filters: [
 		{
-			"fieldname":"warehouse",
-			"label": __("Warehouse"),
-			"fieldtype": "Link",
-			"options": "Warehouse"
+			fieldname: "warehouse",
+			label: __("Warehouse"),
+			fieldtype: "Link",
+			options: "Warehouse",
 		},
 		{
-			"fieldname":"item_group",
-			"label": __("Item Group"),
-			"fieldtype": "Link",
-			"options": "Item Group"
+			fieldname: "item_group",
+			label: __("Item Group"),
+			fieldtype: "Link",
+			options: "Item Group",
 		},
-	]
-}
+	],
+};

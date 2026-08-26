@@ -1,117 +1,115 @@
-frappe.require([
-    '/assets/csf_tz/js/csfUtlis.js',
-    '/assets/csf_tz/js/shortcuts.js'
-]);
+frappe.require(["/assets/csf_tz/js/csfUtlis.js", "/assets/csf_tz/js/shortcuts.js"]);
 
 frappe.ui.form.on("Sales Order", {
-    // preload settings as a Promise
-    onload: function (frm) {
-        frm._csf_settings_promise = (async () => {
-            try {
-                // Fetch both fields in one go
-                const limit = await frappe.db.get_single_value(
-                    "CSF TZ Settings",
-                    "limit_uom_as_item_uom"
-                );
-                const show = await frappe.db.get_single_value(
-                    "CSF TZ Settings",
-                    "show_customer_outstanding_in_sales_order"
-                );
+	// preload settings as a Promise
+	onload: function (frm) {
+		frm._csf_settings_promise = (async () => {
+			try {
+				// Fetch both fields in one go
+				const limit = await frappe.db.get_single_value("CSF TZ Settings", "limit_uom_as_item_uom");
+				const show = await frappe.db.get_single_value(
+					"CSF TZ Settings",
+					"show_customer_outstanding_in_sales_order"
+				);
 
-                return {
-                    limit_uom_as_item_uom: Number(limit),
-                    show_customer_outstanding_in_sales_order: Number(show)
-                };
-            } catch (e) {
-                console.warn("Failed to preload CSF TZ Settings", e);
-                return {};
-            }
-        })();
-    },
-    refresh: async function (frm) {
-        const settings = await frm._csf_settings_promise;
-        if (settings.limit_uom_as_item_uom === 1) {
-            frm.set_query("uom", "items", function (frm, cdt, cdn) {
-                let row = locals[cdt][cdn];
-                return {
-                    query: "erpnext.accounts.doctype.pricing_rule.pricing_rule.get_item_uoms",
-                    filters: {
-                        value: row.item_code,
-                        apply_on: "Item Code",
-                    },
-                };
-            });
-        }
-    },
-    customer: async function (frm) {
-        if (!frm.doc.customer) return;
-        const settings = await frm._csf_settings_promise;
-        if (settings.show_customer_outstanding_in_sales_order === 1) {
-            frappe.call({
-                method: 'csf_tz.csftz_hooks.customer.get_customer_total_unpaid_amount',
-                args: {
-                    customer: frm.doc.customer,
-                    company: frm.doc.company,
-                },
-                callback: function (r) {
-                    if (r.message) console.info(r.message);
-                }
-            });
-        } else {
-            console.info("Skipping outstanding check: disabled in settings.");
-        }
-        setTimeout(function () {
-            if (!frm.doc.tax_category) {
-                frappe.call({
-                    method: "csf_tz.custom_api.get_tax_category",
-                    args: {
-                        doc_type: frm.doc.doctype,
-                        company: frm.doc.company,
-                    },
-                    callback: function (r) {
-                        if (!r.exc) {
-                            frm.set_value("tax_category", r.message);
-                            frm.trigger("tax_category");
-                        }
-                    }
-                });
-            }
-        }, 1000);
-    },
-    default_item_discount: function (frm) {
-        frm.doc.items.forEach(item => {
-            frappe.model.set_value(item.doctype, item.name, 'discount_percentage', frm.doc.default_item_discount);
-        });
-    },
+				return {
+					limit_uom_as_item_uom: Number(limit),
+					show_customer_outstanding_in_sales_order: Number(show),
+				};
+			} catch (e) {
+				console.warn("Failed to preload CSF TZ Settings", e);
+				return {};
+			}
+		})();
+	},
+	refresh: async function (frm) {
+		const settings = await frm._csf_settings_promise;
+		if (settings.limit_uom_as_item_uom === 1) {
+			frm.set_query("uom", "items", function (frm, cdt, cdn) {
+				let row = locals[cdt][cdn];
+				return {
+					query: "erpnext.accounts.doctype.pricing_rule.pricing_rule.get_item_uoms",
+					filters: {
+						value: row.item_code,
+						apply_on: "Item Code",
+					},
+				};
+			});
+		}
+	},
+	customer: async function (frm) {
+		if (!frm.doc.customer) return;
+		const settings = await frm._csf_settings_promise;
+		if (settings.show_customer_outstanding_in_sales_order === 1) {
+			frappe.call({
+				method: "csf_tz.csftz_hooks.customer.get_customer_total_unpaid_amount",
+				args: {
+					customer: frm.doc.customer,
+					company: frm.doc.company,
+				},
+				callback: function (r) {
+					if (r.message) console.info(r.message);
+				},
+			});
+		} else {
+			console.info("Skipping outstanding check: disabled in settings.");
+		}
+		setTimeout(function () {
+			if (!frm.doc.tax_category) {
+				frappe.call({
+					method: "csf_tz.custom_api.get_tax_category",
+					args: {
+						doc_type: frm.doc.doctype,
+						company: frm.doc.company,
+					},
+					callback: function (r) {
+						if (!r.exc) {
+							frm.set_value("tax_category", r.message);
+							frm.trigger("tax_category");
+						}
+					},
+				});
+			}
+		}, 1000);
+	},
+	default_item_discount: function (frm) {
+		frm.doc.items.forEach((item) => {
+			frappe.model.set_value(
+				item.doctype,
+				item.name,
+				"discount_percentage",
+				frm.doc.default_item_discount
+			);
+		});
+	},
 });
 
 frappe.ui.keys.add_shortcut({
-    shortcut: 'ctrl+q',
-    action: () => {
-        ctrlQ("Sales Order Item");
-    },
-    page: this.page,
-    description: __('Select Item Warehouse'),
-    ignore_inputs: true,
+	shortcut: "ctrl+q",
+	action: () => {
+		ctrlQ("Sales Order Item");
+	},
+	page: this.page,
+	description: __("Select Item Warehouse"),
+	ignore_inputs: true,
 });
 
 frappe.ui.keys.add_shortcut({
-    shortcut: 'ctrl+i',
-    action: () => {
-        ctrlI("Sales Order Item");
-    },
-    page: this.page,
-    description: __('Select Customer Item Price'),
-    ignore_inputs: true,
+	shortcut: "ctrl+i",
+	action: () => {
+		ctrlI("Sales Order Item");
+	},
+	page: this.page,
+	description: __("Select Customer Item Price"),
+	ignore_inputs: true,
 });
 
-
 frappe.ui.keys.add_shortcut({
-    shortcut: 'ctrl+u',
-    action: () => {
-        ctrlU("Sales Order Item");
-    },
-    page: this.page,
-    description: __('Select Item Price'),
-    ignore_inputs: true,
+	shortcut: "ctrl+u",
+	action: () => {
+		ctrlU("Sales Order Item");
+	},
+	page: this.page,
+	description: __("Select Item Price"),
+	ignore_inputs: true,
 });

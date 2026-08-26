@@ -6,15 +6,15 @@ frappe.ui.form.on("Payroll Entry", {
 			method: "csf_tz.kcb.api.kcb_api.is_kcb_enabled",
 			callback: (r) => {
 				const enabled = !!r.message;
-			if (!enabled) {
-				frm.remove_custom_button(__(kcbButtonName));
-				return;
-			}
-			if (frm.doc.docstatus === 1) {
-				validate_salary_slips(frm);
-			} else {
-				frm.remove_custom_button(__(kcbButtonName));
-			}
+				if (!enabled) {
+					frm.remove_custom_button(__(kcbButtonName));
+					return;
+				}
+				if (frm.doc.docstatus === 1) {
+					validate_salary_slips(frm);
+				} else {
+					frm.remove_custom_button(__(kcbButtonName));
+				}
 			},
 		});
 	},

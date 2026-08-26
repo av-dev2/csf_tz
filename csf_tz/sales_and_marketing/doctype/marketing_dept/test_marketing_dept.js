@@ -10,14 +10,14 @@ QUnit.test("test: Marketing Dept", function (assert) {
 
 	frappe.run_serially([
 		// insert a new Marketing Dept
-		() => frappe.tests.make('Marketing Dept', [
-			// values to be set
-			{key: 'value'}
-		]),
+		() =>
+			frappe.tests.make("Marketing Dept", [
+				// values to be set
+				{ key: "value" },
+			]),
 		() => {
-			assert.equal(cur_frm.doc.key, 'value');
+			assert.equal(cur_frm.doc.key, "value");
 		},
-		() => done()
+		() => done(),
 	]);
-
 });

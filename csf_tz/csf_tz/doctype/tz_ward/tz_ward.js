@@ -1,8 +1,7 @@
 // Copyright (c) 2021, Aakvatech and contributors
 // For license information, please see license.txt
 
-frappe.ui.form.on('TZ Ward', {
+frappe.ui.form.on("TZ Ward", {
 	// refresh: function(frm) {
-
 	// }
 });

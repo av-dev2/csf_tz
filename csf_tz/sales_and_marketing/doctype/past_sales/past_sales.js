@@ -1,8 +1,6 @@
 // Copyright (c) 2019, Frappe Technologies Pvt. Ltd. and contributors
 // For license information, please see license.txt
 
-frappe.ui.form.on('Past Sales', {
-	refresh: function(frm) {
-
-	}
+frappe.ui.form.on("Past Sales", {
+	refresh: function (frm) {},
 });

@@ -3,12 +3,12 @@
 /* eslint-disable */
 
 frappe.query_reports["Loan Repayment Details"] = {
-	"filters": [
+	filters: [
 		{
-			"fieldname": "employee",
-			"fieldtype": "Link",
-			"label": __("Employee"),
-			"options": "Employee"
-		}
-	]
+			fieldname: "employee",
+			fieldtype: "Link",
+			label: __("Employee"),
+			options: "Employee",
+		},
+	],
 };

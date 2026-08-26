@@ -29,6 +29,6 @@ frappe.dashboards.chart_sources["Multi_Account Balance Timeline"] = {
 			label: __("Include Inactive Accounts"),
 			fieldtype: "Check",
 			default: 0,
-		}
+		},
 	],
 };

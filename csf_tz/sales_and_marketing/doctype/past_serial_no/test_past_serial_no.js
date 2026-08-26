@@ -10,14 +10,14 @@ QUnit.test("test: Past Serial No", function (assert) {
 
 	frappe.run_serially([
 		// insert a new Past Serial No
-		() => frappe.tests.make('Past Serial No', [
-			// values to be set
-			{key: 'value'}
-		]),
+		() =>
+			frappe.tests.make("Past Serial No", [
+				// values to be set
+				{ key: "value" },
+			]),
 		() => {
-			assert.equal(cur_frm.doc.key, 'value');
+			assert.equal(cur_frm.doc.key, "value");
 		},
-		() => done()
+		() => done(),
 	]);
-
 });

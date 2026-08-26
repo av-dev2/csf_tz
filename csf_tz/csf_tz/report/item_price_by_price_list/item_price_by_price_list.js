@@ -3,26 +3,26 @@
 /* eslint-disable */
 
 frappe.query_reports["Item Price by Price List"] = {
-	"filters": [
+	filters: [
 		{
-			"fieldname": "item_description",
-			"label": __("Item or Part of Description"),
-			"fieldtype": "Data",
-			"default": "",
+			fieldname: "item_description",
+			label: __("Item or Part of Description"),
+			fieldtype: "Data",
+			default: "",
 		},
 		{
-			"fieldname": "tax_rate",
-			"label": __("Tax Rate"),
-			"fieldtype": "Percent",
-			"default": "18",
-			"mandatory": 1,
+			fieldname: "tax_rate",
+			label: __("Tax Rate"),
+			fieldtype: "Percent",
+			default: "18",
+			mandatory: 1,
 		},
-	    {
-			"fieldname": "barcode",
-			"label": __("Scan Barcode"),
-			"fieldtype": "Data",
-			"default": "",
-			"options": "Barcode"
-        },
-	]
-}
+		{
+			fieldname: "barcode",
+			label: __("Scan Barcode"),
+			fieldtype: "Data",
+			default: "",
+			options: "Barcode",
+		},
+	],
+};

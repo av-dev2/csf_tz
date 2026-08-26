@@ -10,14 +10,14 @@ QUnit.test("test: EFD Z Report", function (assert) {
 
 	frappe.run_serially([
 		// insert a new EFD Z Report
-		() => frappe.tests.make('EFD Z Report', [
-			// values to be set
-			{key: 'value'}
-		]),
+		() =>
+			frappe.tests.make("EFD Z Report", [
+				// values to be set
+				{ key: "value" },
+			]),
 		() => {
-			assert.equal(cur_frm.doc.key, 'value');
+			assert.equal(cur_frm.doc.key, "value");
 		},
-		() => done()
+		() => done(),
 	]);
-
 });

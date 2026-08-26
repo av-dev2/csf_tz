@@ -10,14 +10,14 @@ QUnit.test("test: Electronic Fiscal Device", function (assert) {
 
 	frappe.run_serially([
 		// insert a new Electronic Fiscal Device
-		() => frappe.tests.make('Electronic Fiscal Device', [
-			// values to be set
-			{key: 'value'}
-		]),
+		() =>
+			frappe.tests.make("Electronic Fiscal Device", [
+				// values to be set
+				{ key: "value" },
+			]),
 		() => {
-			assert.equal(cur_frm.doc.key, 'value');
+			assert.equal(cur_frm.doc.key, "value");
 		},
-		() => done()
+		() => done(),
 	]);
-
 });

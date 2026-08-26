@@ -10,14 +10,14 @@ QUnit.test("test: Order Track", function (assert) {
 
 	frappe.run_serially([
 		// insert a new Order Track
-		() => frappe.tests.make('Order Track', [
-			// values to be set
-			{key: 'value'}
-		]),
+		() =>
+			frappe.tests.make("Order Track", [
+				// values to be set
+				{ key: "value" },
+			]),
 		() => {
-			assert.equal(cur_frm.doc.key, 'value');
+			assert.equal(cur_frm.doc.key, "value");
 		},
-		() => done()
+		() => done(),
 	]);
-
 });

@@ -3,13 +3,13 @@
 /* eslint-disable */
 
 frappe.query_reports["Withholding Tax Payment Summary"] = {
-	"filters": [
+	filters: [
 		{
-			"fieldname": "rental",
-			"label": __("Rental"),
-			"fieldtype": "Select",
-			"options": "Commercial Rent\nResidential Rent",
-			"default": "Commercial Rent"
-		}
-	]
+			fieldname: "rental",
+			label: __("Rental"),
+			fieldtype: "Select",
+			options: "Commercial Rent\nResidential Rent",
+			default: "Commercial Rent",
+		},
+	],
 };

@@ -1,7 +1,7 @@
 // Copyright (c) 2024, Aakvatech Limited and contributors
 // For license information, please see license.txt
 
-frappe.ui.form.on('Simplify VFD Settings', {
+frappe.ui.form.on("Simplify VFD Settings", {
 	// refresh: function(frm) {
 
 	// }
@@ -16,7 +16,7 @@ frappe.ui.form.on('Simplify VFD Settings', {
 				if (r.message) {
 					frm.refresh();
 				}
-			}
-		})
+			},
+		});
 	},
 });

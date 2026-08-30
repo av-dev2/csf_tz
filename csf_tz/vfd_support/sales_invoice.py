@@ -134,36 +134,28 @@ def get_item_inclusive_amount(item):
 
 @erpnext.allow_regional
 def get_itemised_tax_breakup_data(doc):
-	itemised_tax = get_itemised_tax(doc.taxes)
+	itemised_tax = get_itemised_tax(doc)
 	return itemised_tax
 
 
-def get_itemised_tax(taxes, with_tax_account=False):
+def get_itemised_tax(doc, with_tax_account=False):
 	itemised_tax = {}
-	for tax in taxes:
+	for row in doc.get("_item_wise_tax_details") or []:
+		item = row.get("item")
+		tax = row.get("tax")
+		if not item or not tax:
+			continue
 		if getattr(tax, "category", None) and tax.category == "Valuation":
 			continue
 
-		item_tax_map = json.loads(tax.item_wise_tax_detail) if tax.item_wise_tax_detail else {}
-		if item_tax_map:
-			for item_code, tax_data in item_tax_map.items():
-				itemised_tax.setdefault(item_code, frappe._dict())
+		item_code = item.item_code or item.item_name
+		tax_info = itemised_tax.setdefault(item_code, frappe._dict()).setdefault(
+			tax.description, frappe._dict(tax_rate=flt(row.rate), tax_amount=0.0)
+		)
+		tax_info.tax_amount += flt(row.amount)
 
-				tax_rate = 0.0
-				tax_amount = 0.0
-
-				if isinstance(tax_data, list):
-					tax_rate = flt(tax_data[0])
-					tax_amount = flt(tax_data[1])
-				else:
-					tax_rate = flt(tax_data)
-
-				itemised_tax[item_code][tax.description] = frappe._dict(
-					dict(tax_rate=tax_rate, tax_amount=tax_amount)
-				)
-
-				if with_tax_account:
-					itemised_tax[item_code][tax.description].tax_account = tax.account_head
+		if with_tax_account:
+			tax_info.tax_account = tax.account_head
 
 	return itemised_tax
 

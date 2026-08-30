@@ -1,0 +1,803 @@
+[
+ {
+  "path": "csf_tz.api.selcom.create_order_minimal",
+  "args": [],
+  "decorator": "frappe.whitelist()",
+  "line": 22,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.bank_api.receive_callback",
+  "args": [],
+  "decorator": "frappe.whitelist(allow_guest=True)",
+  "line": 21,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.bank_api.receive_validate_reference",
+  "args": [],
+  "decorator": "frappe.whitelist(allow_guest=True)",
+  "line": 27,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.budget_check.check_budget_before_submit",
+  "args": [
+   "doctype",
+   "docname",
+   "setting_field"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 86,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csf_tz.dashboard_chart_source.multi_account_balance_timeline.multi_account_balance_timeline.get",
+  "args": [
+   "chart_name",
+   "chart",
+   "no_cache",
+   "filters",
+   "from_date",
+   "to_date",
+   "timespan",
+   "time_interval",
+   "heatmap_year"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 13,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csf_tz.dashboard_chart_source.multi_account_balance_timeline.multi_account_balance_timeline.get_sample_data",
+  "args": [
+   "chart_name"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 33,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csf_tz.dashboard_chart_source.multi_account_balance_timeline.multi_account_balance_timeline.create_sample_accounts",
+  "args": [
+   "company"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 68,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csf_tz.dashboard_chart_source.multi_account_balance_timeline.multi_account_balance_timeline.debug_chart_data",
+  "args": [
+   "company"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 83,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csf_tz.dashboard_chart_source.multi_account_balance_timeline.multi_account_balance_timeline.create_test_transactions",
+  "args": [
+   "company",
+   "account_name",
+   "amount"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 872,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csf_tz.dashboard_chart_source.multi_account_balance_timeline.multi_account_balance_timeline.create_sample_accounts",
+  "args": [
+   "self",
+   "company"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 612,
+  "in_class": "MultiBankBalance"
+ },
+ {
+  "path": "csf_tz.csf_tz.doctype.efd_z_report.efd_z_report.get_sales_invoice",
+  "args": [
+   "self"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 25,
+  "in_class": "EFDZReport"
+ },
+ {
+  "path": "csf_tz.csf_tz.doctype.foreign_import_transaction.foreign_import_transaction.recalculate_differences",
+  "args": [
+   "self"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 146,
+  "in_class": "ForeignImportTransaction"
+ },
+ {
+  "path": "csf_tz.csf_tz.doctype.foreign_import_transaction.foreign_import_transaction.get_exchange_summary",
+  "args": [
+   "self"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 156,
+  "in_class": "ForeignImportTransaction"
+ },
+ {
+  "path": "csf_tz.csf_tz.doctype.latra_licenses.latra_licenses.update_latra_records",
+  "args": [
+   "force"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 82,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csf_tz.doctype.latra_licenses.latra_licenses.update_latra_offences",
+  "args": [
+   "force"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 116,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csf_tz.doctype.tra_tax_inv.tra_tax_inv.verify_tra_receipt",
+  "args": [
+   "verification_code",
+   "qr_code_data"
+  ],
+  "decorator": "frappe.whitelist(allow_guest=True)",
+  "line": 26,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csf_tz.doctype.tra_tax_inv.tra_tax_inv.create_invoice_from_tra_tax_inv",
+  "args": [
+   "tra_tax_inv_name",
+   "invoice_type"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 822,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csf_tz.doctype.tz_insurance_cover_note.tz_insurance_cover_note.update_covernote_docs",
+  "args": [],
+  "decorator": "frappe.whitelist()",
+  "line": 25,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csf_tz.doctype.vehicle_fine_record.vehicle_fine_record.get_fine",
+  "args": [
+   "number_plate"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 252,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csf_tz.doctype.vehicle_sync_task.processor.run_vehicle_batch",
+  "args": [],
+  "decorator": "frappe.whitelist()",
+  "line": 49,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csf_tz.doctype.vehicle_sync_task.processor.create_sync_task",
+  "args": [
+   "vehicle_no",
+   "priority",
+   "immediate"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 89,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csf_tz.doctype.vehicle_sync_task.processor.seed_vehicle_sync_queue",
+  "args": [],
+  "decorator": "frappe.whitelist()",
+  "line": 161,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csf_tz.page.jobcards.jobcards.get_job_cards",
+  "args": [],
+  "decorator": "frappe.whitelist()",
+  "line": 7,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csf_tz.page.jobcards.jobcards.get_employees",
+  "args": [
+   "company"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 26,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csf_tz.page.jobcards.jobcards.save_doc",
+  "args": [
+   "doc",
+   "action"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 39,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csf_tz.page.scan_qrcode.scan_qrcode.add_biometric_log",
+  "args": [
+   "data"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 5,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csf_tz.report.salary_register_csf.salary_register_csf.approve",
+  "args": [
+   "data"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 461,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csf_tz.report.salary_register_ctc.salary_register_ctc.approve",
+  "args": [
+   "data"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 277,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csftz_hooks.additional_salary.create_additional_salary_journal",
+  "args": [
+   "doc",
+   "method"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 7,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csftz_hooks.additional_salary.generate_additional_salary_records",
+  "args": [],
+  "decorator": "frappe.whitelist()",
+  "line": 76,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csftz_hooks.additional_salary.get_employee_base_salary_in_hours",
+  "args": [
+   "employee",
+   "payroll_date"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 151,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csftz_hooks.customer.get_customer_total_unpaid_amount",
+  "args": [
+   "customer",
+   "company"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 6,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csftz_hooks.employee_contact_qr.generate_contact_qr",
+  "args": [
+   "employee"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 10,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csftz_hooks.exchange_calculations.create_manual_exchange_entry",
+  "args": [
+   "tracker_name",
+   "reference_type",
+   "reference_name",
+   "difference_type",
+   "amount",
+   "remarks"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 477,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csftz_hooks.exchange_calculations.debug_payment_linking_issue",
+  "args": [
+   "payment_entry_name"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 517,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csftz_hooks.exchange_calculations.manually_link_payment_to_tracker",
+  "args": [
+   "payment_entry_name",
+   "tracker_name"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 598,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csftz_hooks.item_reposting.enqueue_reposting_sle_gle",
+  "args": [],
+  "decorator": "frappe.whitelist()",
+  "line": 102,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csftz_hooks.items_revaluation.get_data",
+  "args": [
+   "filters"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 6,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csftz_hooks.landed_cost_voucher.get_landed_cost_expenses",
+  "args": [
+   "import_file"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 5,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csftz_hooks.payment_entry.get_outstanding_reference_documents",
+  "args": [
+   "args"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 19,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csftz_hooks.payment_entry.get_outstanding_sales_orders",
+  "args": [
+   "args"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 148,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csftz_hooks.payroll.update_slips",
+  "args": [
+   "payroll_entry"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 64,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csftz_hooks.payroll.update_slip",
+  "args": [
+   "salary_slip",
+   "show_message"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 103,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csftz_hooks.payroll.print_slips",
+  "args": [
+   "payroll_entry"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 121,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csftz_hooks.payroll.create_journal_entry",
+  "args": [
+   "payroll_entry"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 213,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.csftz_hooks.payroll.get_amounts_summary",
+  "args": [
+   "payroll_entry"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 292,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.generate_qrcode",
+  "args": [
+   "qrcode_data"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 24,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.app_error_log",
+  "args": [
+   "title",
+   "error"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 33,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.print_out",
+  "args": [
+   "message",
+   "alert",
+   "add_traceback",
+   "to_error_log"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 38,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.get_item_info",
+  "args": [
+   "item_code"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 128,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.get_item_prices",
+  "args": [
+   "item_code",
+   "currency",
+   "customer",
+   "company"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 164,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.get_item_prices_custom",
+  "args": [
+   "filters",
+   "start",
+   "limit"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 209,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.create_delivery_note",
+  "args": [
+   "doc",
+   "method",
+   "doc_name"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 274,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.make_delivery_note",
+  "args": [
+   "source_name",
+   "target_doc",
+   "set_warehouse"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 330,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.get_pending_sales_invoice",
+  "args": [],
+  "decorator": "frappe.whitelist()",
+  "line": 565,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.make_stock_reconciliation_for_all_pending_material_request",
+  "args": [],
+  "decorator": "frappe.whitelist()",
+  "line": 736,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.get_warehouse_options",
+  "args": [
+   "company"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 807,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.make_withholding_tax_gl_entries_for_purchase",
+  "args": [
+   "doc",
+   "method"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 876,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.get_tax_category",
+  "args": [
+   "doc_type",
+   "company"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 984,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.make_withholding_tax_gl_entries_for_sales",
+  "args": [
+   "doc",
+   "method"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 1015,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.account_exists",
+  "args": [
+   "account_name"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 1595,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.auto_create_account",
+  "args": [
+   "abbr"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 1600,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.create_item_tax_template",
+  "args": [
+   "abbr"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 1684,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.create_tax_category",
+  "args": [],
+  "decorator": "frappe.whitelist()",
+  "line": 1724,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.linking_tax_template",
+  "args": [
+   "doctype",
+   "default_tax_template",
+   "abbr"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 1746,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.make_salary_components_and_structure",
+  "args": [
+   "abbr"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 1787,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.get_item_prices_custom_po",
+  "args": [
+   "filters",
+   "start",
+   "limit"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 2030,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.get_item_prices_po",
+  "args": [
+   "item_code",
+   "currency",
+   "customer",
+   "company"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 2095,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.create_write_off_jv_si",
+  "args": [
+   "sales_invoice",
+   "account"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 2141,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.create_write_off_jv_pi",
+  "args": [
+   "purchase_invoice",
+   "account"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 2196,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.custom_api.create_write_off_jv_pe",
+  "args": [
+   "payment_entry",
+   "account"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 2251,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.kcb.api.kcb_api.is_kcb_enabled",
+  "args": [],
+  "decorator": "frappe.whitelist()",
+  "line": 12,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.kcb.api.kcb_api.check_file_status",
+  "args": [
+   "docname"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 176,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.kcb.payments.make_kcb_payments_initiation_from_payment_entries",
+  "args": [
+   "payment_entries"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 172,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.kcb.payments.make_kcb_payments_initiation_from_payroll_entry",
+  "args": [
+   "payroll_entry_name"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 278,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.stanbic.payments.make_payments_initiation",
+  "args": [
+   "payroll_entry_name",
+   "currency",
+   "stanbic_setting_name"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 6,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.utils.create_custom_fields.export_custom_fields",
+  "args": [
+   "docnames"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 66,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.vfd_providers.doctype.simplify_vfd_settings.simplify_vfd_settings.get_payload",
+  "args": [
+   "doc"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 122,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.vfd_providers.doctype.simplify_vfd_settings.simplify_vfd_settings.post_fiscal_receipt",
+  "args": [
+   "doc",
+   "method",
+   "payload",
+   "invoice_id",
+   "preview"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 192,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.vfd_providers.doctype.simplify_vfd_settings.simplify_vfd_settings.get_bearer_token",
+  "args": [
+   "self"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 33,
+  "in_class": "SimplifyVFDSettings"
+ },
+ {
+  "path": "csf_tz.vfd_providers.doctype.total_vfd_setting.total_vfd_setting.post_fiscal_receipt",
+  "args": [
+   "doc",
+   "method",
+   "payload",
+   "invoice_id",
+   "preview"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 112,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.vfd_providers.doctype.vfdplus_settings.vfdplus_settings.post_fiscal_receipt",
+  "args": [
+   "doc",
+   "method",
+   "payload",
+   "invoice_id",
+   "preview"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 224,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.vfd_providers.doctype.vfdplus_settings.vfdplus_settings.get_account_info",
+  "args": [
+   "company"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 335,
+  "in_class": null
+ },
+ {
+  "path": "csf_tz.vfd_support.utils.generate_tra_vfd",
+  "args": [
+   "docname",
+   "sinv_doc",
+   "method",
+   "caller"
+  ],
+  "decorator": "frappe.whitelist()",
+  "line": 23,
+  "in_class": null
+ }
+]

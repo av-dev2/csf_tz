@@ -13,8 +13,6 @@ from erpnext.stock.utils import get_stock_balance
 from frappe import _
 from frappe.desk.form.linked_with import get_linked_docs, get_linked_doctypes
 from frappe.model.mapper import get_mapped_doc
-from frappe.query_builder import DocType
-from frappe.query_builder.functions import Sum
 from frappe.utils import add_days, cint, flt, getdate, nowdate, nowtime, unique
 
 from csf_tz import console
@@ -79,53 +77,28 @@ def print_out(message: Any, alert: Any = False, add_traceback: Any = False, to_e
 
 
 def get_stock_ledger_entries(item_code):
-	if get_version() == 12:
-		conditions = f" and sle.item_code = '{item_code}'"
-	else:
-		conditions = f" and sle.is_cancelled = 0 and sle.item_code = '{item_code}'"
-	return frappe.db.sql(
-		f"""
-        select sle.batch_no, sle.item_code, sle.warehouse, sle.qty_after_transaction as actual_qty
-            from `tabStock Ledger Entry` sle
-            inner join (
-            SELECT IF(batch_no IS NULL, '', batch_no) as batch_no, item_code, warehouse, max(posting_datetime) as posting_datetime
-                from `tabStock Ledger Entry`
-                group by IF(batch_no IS NULL, '', batch_no), item_code, warehouse) as sle_max
-            on if(sle.batch_no IS NULL, '', sle.batch_no) = sle_max.batch_no
-                and sle.item_code = sle_max.item_code
-                and sle.warehouse = sle_max.warehouse
-                and sle.posting_datetime = sle_max.posting_datetime
-        where sle.docstatus = 1 {conditions}
-        order by sle.warehouse, sle.item_code, sle.batch_no""",
-		as_dict=1,
+	"""Current balance per warehouse and batch. Batch balances come from Serial and Batch Bundles."""
+	if frappe.get_cached_value("Item", item_code, "has_batch_no"):
+		return [
+			frappe._dict(
+				batch_no=row.batch_no, item_code=item_code, warehouse=row.warehouse, actual_qty=row.qty
+			)
+			for row in get_batch_qty(
+				item_code=item_code, for_stock_levels=True, consider_negative_batches=True
+			)
+		]
+	bins = frappe.get_all(
+		"Bin", filters={"item_code": item_code}, fields=["warehouse", "actual_qty"], order_by="warehouse"
 	)
-
-
-def get_version():
-	branch_name = get_app_branch("erpnext")
-	if "12" in branch_name:
-		return 12
-	elif "13" in branch_name:
-		return 13
-	else:
-		return 13
-
-
-def get_app_branch(app):
-	"""Returns branch of an app"""
-	import subprocess
-
-	try:
-		branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=f"../apps/{app}")
-		branch = branch.decode("utf-8")
-		branch = branch.strip()
-		return branch
-	except Exception:
-		return ""
+	return [
+		frappe._dict(batch_no="", item_code=item_code, warehouse=row.warehouse, actual_qty=row.actual_qty)
+		for row in bins
+	]
 
 
 @frappe.whitelist()
 def get_item_info(item_code: Any):
+	frappe.has_permission("Item", throw=True)
 	sle = get_stock_ledger_entries(item_code)
 	iwb_map = {}
 	float_precision = cint(frappe.db.get_default("float_precision")) or 3
@@ -162,6 +135,7 @@ def get_item_info(item_code: Any):
 
 @frappe.whitelist()
 def get_item_prices(item_code: Any, currency: Any, customer: Any = None, company: Any = None):
+	frappe.has_permission("Sales Invoice", throw=True)
 	item_code = f"'{item_code}'"
 	currency = f"'{currency}'"
 	unique_records = int(frappe.db.get_single_value("CSF TZ Settings", "unique_records"))
@@ -207,6 +181,7 @@ def get_item_prices(item_code: Any, currency: Any, customer: Any = None, company
 
 @frappe.whitelist()
 def get_item_prices_custom(filters: Any = None, start: Any = 0, limit: Any = 20):
+	frappe.has_permission("Sales Invoice", throw=True)
 	if isinstance(filters, str):  # If filters is a string, deserialize it
 		import json
 
@@ -402,7 +377,7 @@ def get_linked_docs_info(doctype, docname):
 	if linked_doc:
 		for key, value in linked_doc.items():
 			if key != "Activity Log":
-				for val in value:
+				for val in value["docs"]:
 					dco_info = {
 						"doctype": key,
 						"docname": val.name,
@@ -563,6 +538,7 @@ def get_delivery_note_item_count(item_row_name, sales_invoice):
 
 @frappe.whitelist()
 def get_pending_sales_invoice(*args):
+	frappe.has_permission("Sales Invoice", throw=True)
 	filters = args[5]
 	start = cint(args[3])
 	page_length = cint(args[4])
@@ -653,7 +629,7 @@ def get_list_pending_sales_invoice(invoice_name=None, warehouse=None):
 
 
 def create_delivery_note_for_all_pending_sales_invoice(doc=None, method=None):
-	company_list = frappe.get_all("Company", fiters={"enabled_auto_create_delivery_notes": 1}, pluck="name")
+	company_list = frappe.get_all("Company", filters={"enabled_auto_create_delivery_notes": 1}, pluck="name")
 	invoices = get_list_pending_sales_invoice()
 	for i in invoices:
 		if i.company not in company_list:
@@ -1215,35 +1191,21 @@ def get_item_duplicates(source_doc):
 
 
 def get_batch_per_item(item_code, posting_date, warehouse):
-	""" "fetch batch details for item code and warehouse"""
-
-	sle = DocType("Stock Ledger Entry")
-	ba = DocType("Batch")
-
-	batch_query = (
-		frappe.qb.from_(sle)
-		.inner_join(ba)
-		.on(sle.batch_no == ba.batch_id)
-		.select(
-			sle.batch_no,
-			sle.warehouse,
-			Sum(sle.actual_qty).as_("qty"),
-			ba.stock_uom,
-			ba.expiry_date,
+	"""Unexpired batch balances of the item in the warehouse, read from Serial and Batch Bundles."""
+	batch_records = []
+	for row in get_batch_qty(item_code=item_code, warehouse=warehouse, for_stock_levels=True):
+		expiry_date, stock_uom = frappe.db.get_value("Batch", row.batch_no, ["expiry_date", "stock_uom"])
+		if not expiry_date or getdate(expiry_date) < getdate(posting_date):
+			continue
+		batch_records.append(
+			frappe._dict(
+				batch_no=row.batch_no,
+				warehouse=row.warehouse,
+				qty=row.qty,
+				stock_uom=stock_uom,
+				expiry_date=expiry_date,
+			)
 		)
-		.where(
-			(sle.item_code == item_code)
-			& (sle.is_cancelled == 0)
-			& (sle.batch_no != "")
-			& (ba.expiry_date >= posting_date)
-		)
-	)
-
-	if warehouse:
-		batch_query = batch_query.where(sle.warehouse == warehouse)
-
-	batch_records = batch_query.run(as_dict=True)
-
 	return batch_records
 
 
@@ -1700,15 +1662,17 @@ def create_item_tax_template(abbr: Any):
 		{"title": "Zanzibar VAT Tax 0%", "tax_type": f"VAT Payable Account - {abbr}"},
 	]
 
+	company = get_company_by_abbr(abbr)
 	for item_tax_template_info in item_tax_template_list:
 		existing_template = frappe.db.exists(
 			"Item Tax Template",
-			{"title": item_tax_template_info.get("title")},
+			{"title": item_tax_template_info.get("title"), "company": company},
 		)
 
 		if not existing_template:
 			item_tax_template_doc = frappe.new_doc("Item Tax Template")
 			item_tax_template_doc.title = item_tax_template_info.get("title")
+			item_tax_template_doc.company = company
 			item_tax_template_doc.append(
 				"taxes",
 				{"tax_type": item_tax_template_info.get("tax_type"), "tax_rate": ""},
@@ -1718,6 +1682,13 @@ def create_item_tax_template(abbr: Any):
 			continue
 
 	return "Tax Template added successfully."
+
+
+def get_company_by_abbr(abbr):
+	company = frappe.db.get_value("Company", {"abbr": abbr}, "name")
+	if not company:
+		frappe.throw(_("No Company found with abbreviation {0}").format(abbr))
+	return company
 
 
 @frappe.whitelist()
@@ -1747,7 +1718,7 @@ def linking_tax_template(doctype: Any, default_tax_template: Any, abbr: Any):
 	item_list = frappe.db.get_all("Item", filters=default_tax_template)
 
 	for item in item_list:
-		item_doc = frappe.get_doc("Item", item.name, fields=["default_tax_template"])
+		item_doc = frappe.get_doc("Item", item.name)
 		if item_doc.default_tax_template == f"Tanzania VAT 18% - {abbr}":
 			item_doc.append(
 				"taxes",
@@ -1968,8 +1939,7 @@ def make_salary_components_and_structure(abbr: Any):
 			"account": f"PAYE Payable - {abbr}",
 		},
 	]
-	# frappe.throw(str(salary_components_list))
-
+	company = get_company_by_abbr(abbr)
 	for salary_component in salary_components_list:
 		existing_salary_component = frappe.db.exists(
 			"Salary Component",
@@ -1983,7 +1953,9 @@ def make_salary_components_and_structure(abbr: Any):
 			salary_component_doc.abbr = salary_component.get("abbr")
 			salary_component_doc.remove_if_zero_valued = salary_component.get("remove_if_zero_valued")
 			salary_component_doc.do_not_include_in_total = salary_component.get("do_not_include_in_total")
-			salary_component_doc.append("accounts", {"account": salary_component.get("account")})
+			salary_component_doc.append(
+				"accounts", {"company": company, "account": salary_component.get("account")}
+			)
 			salary_component_doc.insert()
 		else:
 			continue
@@ -1994,6 +1966,8 @@ def make_salary_components_and_structure(abbr: Any):
 	if not existing_salary_strusture:
 		salary_structure_doc = frappe.new_doc("Salary Structure")
 		salary_structure_doc.name = salary_structure_doc_name
+		salary_structure_doc.company = company
+		salary_structure_doc.currency = frappe.get_cached_value("Company", company, "default_currency")
 		salary_structure_doc.is_active = "Yes"
 		for salary_components in salary_components_earnings_list:
 			salary_structure_doc.append(
@@ -2028,6 +2002,7 @@ def make_salary_components_and_structure(abbr: Any):
 
 @frappe.whitelist()
 def get_item_prices_custom_po(filters: Any = None, start: Any = 0, limit: Any = 20):
+	frappe.has_permission("Purchase Invoice", throw=True)
 	if isinstance(filters, str):  # If filters is a string, deserialize it
 		import json
 
@@ -2093,6 +2068,7 @@ def get_item_prices_custom_po(filters: Any = None, start: Any = 0, limit: Any = 
 
 @frappe.whitelist()
 def get_item_prices_po(item_code: Any, currency: Any, customer: Any = None, company: Any = None):
+	frappe.has_permission("Purchase Invoice", throw=True)
 	item_code = f"'{item_code}'"
 	currency = f"'{currency}'"
 	unique_records = int(frappe.db.get_single_value("CSF TZ Settings", "unique_records"))

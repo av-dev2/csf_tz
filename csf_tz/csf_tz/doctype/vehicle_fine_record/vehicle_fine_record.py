@@ -5,7 +5,6 @@ import base64
 import hashlib
 import json
 import re
-from time import sleep
 
 import frappe
 import requests
@@ -112,140 +111,135 @@ def check_fine_all_vehicles(batch_size=20):
 
 
 def sync_vehicle_fines(number_plate):
-    number_plate = normalize_number_plate(number_plate)
+	number_plate = normalize_number_plate(number_plate)
 
-    if not number_plate:
-        return {
-            "status": "invalid",
-            "message": "Missing number plate",
-            "fine_list": [],
-        }
+	if not number_plate:
+		return {
+			"status": "invalid",
+			"message": "Missing number plate",
+			"fine_list": [],
+		}
 
-    if not is_valid_number_plate(number_plate):
-        return {
-            "status": "invalid",
-            "message": f"Skipping invalid plate: {number_plate}",
-            "fine_list": [],
-        }
+	if not is_valid_number_plate(number_plate):
+		return {
+			"status": "invalid",
+			"message": f"Skipping invalid plate: {number_plate}",
+			"fine_list": [],
+		}
 
-    url = "https://tms.tpf.go.tz/api/OffenceCheck"
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "*/*",
-        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
-        "Origin": "https://tms.tpf.go.tz",
-        "Referer": "https://tms.tpf.go.tz/",
-        "Connection": "keep-alive",
-    }
-    payload = {"vehicle": number_plate}
+	url = "https://tms.tpf.go.tz/api/OffenceCheck"
+	headers = {
+		"Content-Type": "application/json",
+		"Accept": "*/*",
+		"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
+		"Origin": "https://tms.tpf.go.tz",
+		"Referer": "https://tms.tpf.go.tz/",
+		"Connection": "keep-alive",
+	}
+	payload = {"vehicle": number_plate}
 
-    try:
-        response = requests.post(url, json=payload, headers=headers, timeout=30)
-        if response.status_code == 429:
-            return {
-                "status": "rate_limited",
-                "message": f"TPF rate limited {number_plate}",
-                "fine_list": [],
-            }
-        response.raise_for_status()
-    except requests.exceptions.RequestException as exc:
-        frappe.logger().warning(f"[VehicleFine] TPF request failed for {number_plate}: {exc}")
-        return {
-            "status": "retryable_error",
-            "message": str(exc),
-            "fine_list": [],
-        }
+	try:
+		response = requests.post(url, json=payload, headers=headers, timeout=30)
+		if response.status_code == 429:
+			return {
+				"status": "rate_limited",
+				"message": f"TPF rate limited {number_plate}",
+				"fine_list": [],
+			}
+		response.raise_for_status()
+	except requests.exceptions.RequestException as exc:
+		frappe.logger().warning(f"[VehicleFine] TPF request failed for {number_plate}: {exc}")
+		return {
+			"status": "retryable_error",
+			"message": str(exc),
+			"fine_list": [],
+		}
 
-    try:
-        result = response.json()
-        result = decode_tpf_response(result)
-    except Exception:
-        frappe.log_error(
-            title="TPF API: Invalid JSON",
-            message=(
-                f"Non-JSON response for {number_plate}: "
-                f"{response.text[:500]}"
-            ),
-        )
-        return {
-            "status": "error",
-            "message": "Invalid JSON response",
-            "fine_list": [],
-        }
+	try:
+		result = response.json()
+		result = decode_tpf_response(result)
+	except Exception:
+		frappe.log_error(
+			title="TPF API: Invalid JSON",
+			message=(f"Non-JSON response for {number_plate}: {response.text[:500]}"),
+		)
+		return {
+			"status": "error",
+			"message": "Invalid JSON response",
+			"fine_list": [],
+		}
 
-    data = result.get("pending_transactions", [])
-    fine_list = []
+	data = result.get("pending_transactions", [])
+	fine_list = []
 
-    if data:
-        fine_list = [fine.get("reference") for fine in data if fine.get("reference")]
-        if not fine_list:
-            return {"status": "success", "message": "No fine references", "fine_list": fine_list}
+	if data:
+		fine_list = [fine.get("reference") for fine in data if fine.get("reference")]
+		if not fine_list:
+			return {"status": "success", "message": "No fine references", "fine_list": fine_list}
 
-        stale_filters = {
-            "vehicle": number_plate,
-            "status": ["!=", "PAID"],
-            "reference": ["not in", fine_list],
-        }
-        for record in frappe.get_all(
-            "Vehicle Fine Record", filters=stale_filters, pluck="name"
-        ):
-            old_status = frappe.db.get_value("Vehicle Fine Record", record, "status")
-            frappe.db.set_value("Vehicle Fine Record", record, "status", "PAID")
-            _notify_vehicle_fine_status_change(record, number_plate, old_status, "PAID")
+		stale_filters = {
+			"vehicle": number_plate,
+			"status": ["!=", "PAID"],
+			"reference": ["not in", fine_list],
+		}
+		for record in frappe.get_all("Vehicle Fine Record", filters=stale_filters, pluck="name"):
+			old_status = frappe.db.get_value("Vehicle Fine Record", record, "status")
+			frappe.db.set_value("Vehicle Fine Record", record, "status", "PAID")
+			_notify_vehicle_fine_status_change(record, number_plate, old_status, "PAID")
 
-        existing_refs = frappe.get_all(
-            "Vehicle Fine Record",
-            filters={"vehicle": number_plate, "reference": ["in", fine_list]},
-            pluck="reference",
-        )
-        for fine in data:
-            fine_ref = fine.get("reference")
-            if not fine_ref or fine_ref in existing_refs:
-                continue
-            charge = fine.get("charge") or fine.get("amount")
-            penalty = fine.get("penalty")
-            try:
-                doc = frappe.get_doc(
-                    {
-                        "doctype": "Vehicle Fine Record",
-                        "vehicle": number_plate,
-                        "reference": fine_ref,
-                        "status": fine.get("status") or "PENDING",
-                        "licence": fine.get("licence"),
-                        "location": fine.get("location"),
-                        "officer": fine.get("officer"),
-                        "charge": charge,
-                        "penalty": penalty,
-                        "total": fine.get("total") or (flt(charge) + flt(penalty)),
-                        "offence": fine.get("offence"),
-                        "issued_date": fine.get("issued_date") or fine.get("date"),
-                    }
-                )
-                doc.insert(ignore_permissions=True)
-                _notify_vehicle_fine_new(doc)
-            except frappe.exceptions.DuplicateEntryError:
-                pass
-            except Exception:
-                frappe.log_error(
-                    title=f"Error creating fine record for {number_plate}",
-                    message=frappe.get_traceback(),
-                )
-    else:
-        for record in frappe.get_all(
-            "Vehicle Fine Record",
-            filters={"vehicle": number_plate, "status": ["!=", "PAID"]},
-            pluck="name",
-        ):
-            old_status = frappe.db.get_value("Vehicle Fine Record", record, "status")
-            frappe.db.set_value("Vehicle Fine Record", record, "status", "PAID")
-            _notify_vehicle_fine_status_change(record, number_plate, old_status, "PAID")
+		existing_refs = frappe.get_all(
+			"Vehicle Fine Record",
+			filters={"vehicle": number_plate, "reference": ["in", fine_list]},
+			pluck="reference",
+		)
+		for fine in data:
+			fine_ref = fine.get("reference")
+			if not fine_ref or fine_ref in existing_refs:
+				continue
+			charge = fine.get("charge") or fine.get("amount")
+			penalty = fine.get("penalty")
+			try:
+				doc = frappe.get_doc(
+					{
+						"doctype": "Vehicle Fine Record",
+						"vehicle": number_plate,
+						"reference": fine_ref,
+						"status": fine.get("status") or "PENDING",
+						"licence": fine.get("licence"),
+						"location": fine.get("location"),
+						"officer": fine.get("officer"),
+						"charge": charge,
+						"penalty": penalty,
+						"total": fine.get("total") or (flt(charge) + flt(penalty)),
+						"offence": fine.get("offence"),
+						"issued_date": fine.get("issued_date") or fine.get("date"),
+					}
+				)
+				doc.insert(ignore_permissions=True)
+				_notify_vehicle_fine_new(doc)
+			except frappe.exceptions.DuplicateEntryError:
+				pass
+			except Exception:
+				frappe.log_error(
+					title=f"Error creating fine record for {number_plate}",
+					message=frappe.get_traceback(),
+				)
+	else:
+		for record in frappe.get_all(
+			"Vehicle Fine Record",
+			filters={"vehicle": number_plate, "status": ["!=", "PAID"]},
+			pluck="name",
+		):
+			old_status = frappe.db.get_value("Vehicle Fine Record", record, "status")
+			frappe.db.set_value("Vehicle Fine Record", record, "status", "PAID")
+			_notify_vehicle_fine_status_change(record, number_plate, old_status, "PAID")
 
-    frappe.db.commit()
-    return {
-        "status": "success",
-        "message": f"Processed fine sync for {number_plate}",
-        "fine_list": fine_list,
-    }
+	frappe.db.commit()
+	return {
+		"status": "success",
+		"message": f"Processed fine sync for {number_plate}",
+		"fine_list": fine_list,
+	}
 
 
 @frappe.whitelist()

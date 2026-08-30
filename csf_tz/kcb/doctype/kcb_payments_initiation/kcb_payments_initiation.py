@@ -63,6 +63,7 @@ class KCBPaymentsInitiation(Document):
 				"file_name": f"{file_base_name}.txt",
 				"attached_to_doctype": "KCB Payments Initiation",
 				"attached_to_name": self.name,
+				"attached_to_field": "payment_file",
 				"content": file_content,
 				"folder": "Home",
 			}
@@ -75,6 +76,7 @@ class KCBPaymentsInitiation(Document):
 				"file_name": f"{file_base_name}.txt.gpg",
 				"attached_to_doctype": "KCB Payments Initiation",
 				"attached_to_name": self.name,
+				"attached_to_field": "encrypted_file",
 				"content": encrypted_data,
 				"folder": "Home",
 			}

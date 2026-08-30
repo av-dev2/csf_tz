@@ -68,7 +68,7 @@
    "label": "Beneficiary bank name"
   },
   {
-   "fetch_from": "employee.bank_country_code",
+   "fetch_from": "employee.custom_bank_country_code",
    "fieldname": "beneficiary_bank_country_code",
    "fieldtype": "Data",
    "label": "Beneficiary bank country code",
@@ -121,7 +121,7 @@
    "label": "Beneficiary bank sort code"
   },
   {
-   "fetch_from": "employee.employee_country_code",
+   "fetch_from": "employee.custom_employee_country_code",
    "fieldname": "beneficiary_country",
    "fieldtype": "Data",
    "label": "Beneficiary Country"

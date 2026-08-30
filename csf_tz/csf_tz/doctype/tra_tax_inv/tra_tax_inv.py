@@ -417,7 +417,7 @@ def extract_company_info(soup, receipt_data):
 			# Extract Address (P.O.BOX)
 			if "P.O.BOX" in text_content:
 				address_match = text_content.split("P.O.BOX")[1].split("\n")[0].strip()
-				receipt_data["company_info"]["address"] = f"P.O.BOX{address_match}"
+				receipt_data["company_info"]["address"] = f"P.O.BOX {address_match}"
 
 	except Exception as e:
 		frappe.logger().error(f"Error extracting company info: {str(e)}")
@@ -1187,9 +1187,9 @@ def get_or_create_customer(customer_name):
 	try:
 		customer_doc = frappe.new_doc("Customer")
 		customer_doc.customer_name = customer_name
-		customer_doc.customer_group = (
-			frappe.db.get_single_value("Selling Settings", "customer_group") or "All Customer Groups"
-		)
+		customer_doc.customer_group = frappe.db.get_single_value(
+			"Selling Settings", "customer_group"
+		) or frappe.db.get_value("Customer Group", {"is_group": 0}, "name")
 		customer_doc.customer_type = "Company"
 		customer_doc.insert()
 

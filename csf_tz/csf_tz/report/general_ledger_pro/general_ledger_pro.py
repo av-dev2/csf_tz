@@ -10,6 +10,7 @@ from erpnext.accounts.doctype.accounting_dimension.accounting_dimension import (
 	get_dimension_with_children,
 )
 from erpnext.accounts.report.financial_statements import get_cost_centers_with_children
+from erpnext.accounts.report.general_ledger.general_ledger import get_accounts_with_children
 from erpnext.accounts.report.utils import convert_to_presentation_currency, get_currency
 from erpnext.accounts.utils import get_account_currency
 from frappe import _, _dict
@@ -45,6 +46,16 @@ def execute(filters=None):
 	return columns, res
 
 
+def parse_account_filter(account):
+	"""The desk sends a JSON list; older callers send a single account name."""
+	if isinstance(account, str):
+		try:
+			account = frappe.parse_json(account)
+		except Exception:
+			return [account]
+	return account if isinstance(account, list) else [account]
+
+
 def validate_filters(filters, account_details):
 	if not filters.get("company"):
 		frappe.throw(_("{0} is mandatory").format(_("Company")))
@@ -54,15 +65,16 @@ def validate_filters(filters, account_details):
 			_("{0} and {1} are mandatory").format(frappe.bold(_("From Date")), frappe.bold(_("To Date")))
 		)
 
-	if filters.get("account") and not account_details.get(filters.account):
-		frappe.throw(_("Account {0} does not exists").format(filters.account))
+	if filters.get("account"):
+		filters.account = parse_account_filter(filters.get("account"))
+		for account in filters.account:
+			if not account_details.get(account):
+				frappe.throw(_("Account {0} does not exists").format(account))
 
-	if (
-		filters.get("account")
-		and filters.get("group_by") == _("Group by Account")
-		and account_details[filters.account].is_group == 0
-	):
-		frappe.throw(_("Can not filter based on Account, if grouped by Account"))
+	if filters.get("account") and filters.get("group_by") == _("Group by Account"):
+		for account in filters.account:
+			if account_details[account].is_group == 0:
+				frappe.throw(_("Can not filter based on Account, if grouped by Account"))
 
 	if filters.get("voucher_no") and filters.get("group_by") in [_("Group by Voucher")]:
 		frappe.throw(_("Can not filter based on Voucher No, if grouped by Voucher"))
@@ -95,7 +107,8 @@ def set_account_currency(filters):
 		account_currency = None
 
 		if filters.get("account"):
-			account_currency = get_account_currency(filters.account)
+			currencies = {get_account_currency(account) for account in filters.account}
+			account_currency = currencies.pop() if len(currencies) == 1 else None
 		elif filters.get("party"):
 			gle_currency = frappe.db.get_value(
 				"GL Entry",
@@ -191,13 +204,13 @@ def get_gl_entries(filters, accounting_dimensions):
 	gl_entries_all_except_students = frappe.db.sql(
 		f"""
         select
-            gle.name as gl_entry, posting_date, account, party_type, party,
+            `tabGL Entry`.name as gl_entry, posting_date, account, party_type, party,
             voucher_type, voucher_no, {dimension_fields}
             cost_center, project,
             against_voucher_type, against_voucher, account_currency,
-            remarks, against, is_opening, gle.creation {select_fields}
-        from `tabGL Entry` as gle
-        where party != 'Student' and company=%(company)s {get_conditions(filters)}
+            remarks, against, is_opening, `tabGL Entry`.creation {select_fields}
+        from `tabGL Entry`
+        where ifnull(party, '') != 'Student' and company=%(company)s {get_conditions(filters)}
         {distributed_cost_center_query}
         {order_by_statement}
         """,
@@ -214,7 +227,7 @@ def get_gl_entries(filters, accounting_dimensions):
 	gl_entries = (gl_entries_all_except_students or []) + (gl_entries_students or [])
 
 	if filters.get("presentation_currency"):
-		return convert_to_presentation_currency(gl_entries, currency_map, filters.get("company"))
+		return convert_to_presentation_currency(gl_entries, currency_map, filters)
 	else:
 		return gl_entries
 
@@ -226,11 +239,11 @@ def get_student_gl_entries(
 	return frappe.db.sql(
 		f"""
         select
-            gle.name as gl_entry, posting_date, account, party_type, CONCAT(std.first_name, " ", IFNULL(std.middle_name, ''), " ", IFNULL(std.last_name, '')) as party,
+            `tabGL Entry`.name as gl_entry, posting_date, account, party_type, CONCAT(std.first_name, " ", IFNULL(std.middle_name, ''), " ", IFNULL(std.last_name, '')) as party,
             voucher_type, voucher_no, {dimension_fields}
             cost_center, project,
             against_voucher_type, against_voucher, account_currency,
-            remarks, against, is_opening, gle.creation {select_fields}
+            remarks, against, is_opening, `tabGL Entry`.creation {select_fields}
         from `tabGL Entry` AS gle
         INNER JOIN `tabStudent` AS std ON gle.party = std.name
         where gle.party_type = 'Student' and company=%(company)s {get_conditions(filters)}
@@ -245,11 +258,8 @@ def get_student_gl_entries(
 def get_conditions(filters):
 	conditions = []
 	if filters.get("account"):
-		lft, rgt = frappe.db.get_value("Account", filters["account"], ["lft", "rgt"])
-		conditions.append(
-			f"""account in (select name from tabAccount
-            where lft>={lft} and rgt<={rgt} and docstatus<2)"""
-		)
+		filters.account = get_accounts_with_children(filters.account)
+		conditions.append("account in %(account)s")
 
 	if filters.get("cost_center"):
 		filters.cost_center = get_cost_centers_with_children(filters.cost_center)

@@ -6,6 +6,9 @@ from frappe import _
 
 
 def execute(filters=None):
+	if not frappe.get_meta("Sales Invoice Item").has_field("is_marked"):
+		frappe.throw(_("Custom field Sales Invoice Item.is_marked is not installed on this site"))
+
 	columns, data = [], []
 	columns = [
 		{"fieldname": "customer_name", "label": _("Customer"), "fieldtype": "Data", "width": 150},

@@ -49,6 +49,9 @@ def execute():
 			table.posting_date,
 			table.posting_time,
 			table.qty_after_transaction,
+			table.actual_qty,
+			table.serial_no,
+			table.batch_no,
 		)
 		.where(
 			(table.is_cancelled == 0) & (CombineDatetime(table.posting_date, table.posting_time) >= from_time)

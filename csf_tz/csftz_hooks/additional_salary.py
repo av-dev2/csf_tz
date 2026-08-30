@@ -156,7 +156,7 @@ def get_employee_base_salary_in_hours(employee, payroll_date):
 		"Salary Structure Assignment",
 		filters={"employee": employee, "from_date": ["<=", payroll_date], "docstatus": 1},
 		fields=["name", "base"],
-		order_by="`from_date` DESC",
+		order_by="from_date desc",
 		limit=1,
 	)
 	last_salary_assignment = last_salary_assignment[0] if last_salary_assignment else None

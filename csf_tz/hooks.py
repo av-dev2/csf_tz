@@ -8,6 +8,15 @@ app_email = "info@aakvatech.com"
 app_license = "GNU General Public License (v3)"
 required_apps = ["frappe/erpnext"]
 
+add_to_apps_screen = [
+	{
+		"name": app_name,
+		"logo": "/assets/csf_tz/images/tanzania-workspace.png",
+		"title": app_title,
+		"route": "/desk/tanzania",
+	}
+]
+
 
 # Override Document Class
 override_doctype_class = {  # nosemgrep: frappe-semgrep-rules.rules.override-doctype-class
@@ -54,7 +63,6 @@ doctype_js = {
 	"Quotation": "csf_tz/quotation.js",
 	"Purchase Receipt": "csf_tz/purchase_receipt.js",
 	"Purchase Order": "csf_tz/purchase_order.js",
-	"Bank Reconciliation": "csf_tz/bank_reconciliation.js",
 	"Payroll Entry": [
 		"csf_tz/payroll_entry.js",
 		"stanbic/payroll_entry.js",
@@ -187,7 +195,7 @@ doc_events = {
 	},
 	"Purchase Order": {
 		"validate": [
-			"csf_tz.csftz_hooks.budget.check_budget_for_purchase_invoice",
+			"csf_tz.csftz_hooks.budget.check_budget_for_purchase_order",
 		],
 	},
 	"Material Request": {

@@ -8,15 +8,15 @@ frappe.query_reports["Excise Duty Report"] = {
             "fieldname": "from_date",
             "fieldtype": "Date",
             "label": "From Date",
-            "mandatory": 1,
-            "wildcard_filter": 0
+            "reqd": 1,
+            "default": frappe.datetime.month_start()
         },
         {
             "fieldname": "to_date",
             "fieldtype": "Date",
             "label": "To Date",
-            "mandatory": 1,
-            "wildcard_filter": 0
+            "reqd": 1,
+            "default": frappe.datetime.get_today()
         }
     ]
 }

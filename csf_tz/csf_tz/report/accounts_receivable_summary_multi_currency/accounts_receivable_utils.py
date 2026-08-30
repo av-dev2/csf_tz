@@ -638,12 +638,18 @@ class ReceivablePayableReport:
 					where supplier_group=%s)""")
 				values.append(self.filters.get("supplier_group"))
 
+		if not self.filters.get("company"):
+			frappe.throw(_("{0} is mandatory").format(_("Company")))
+
 		accounts = [
 			d.name
 			for d in frappe.get_all(
 				"Account", filters={"account_type": account_type, "company": self.filters.company}
 			)
 		]
+		if not accounts:
+			frappe.throw(_("No {0} account found for {1}").format(_(account_type), self.filters.company))
+
 		conditions.append("account in ({})".format(",".join(["%s"] * len(accounts))))
 		values += accounts
 

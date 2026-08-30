@@ -10,16 +10,17 @@ def get_json(main_ancestor, ancestor_type="Accounts"):
         INNER JOIN `tabDocField` df ON dt.name = df.parent
         WHERE df.options IS NOT NULL
             AND df.fieldtype = "Link"
-            AND dt.module = ancestor_type
+            AND dt.module = %(ancestor_type)s
         GROUP BY dt.module, dt.name
         UNION ALL
         SELECT CONCAT_WS('.', "erpnext", dt.module, dt.name) as name, dt.name as doctype_name
         FROM `tabDocType` dt
-        INNER JOIN `tabCustom Field` df ON dt.name = df.parent
+        INNER JOIN `tabCustom Field` df ON dt.name = df.dt
         WHERE df.options IS NOT NULL
           AND df.fieldtype = "Link"
-          AND dt.module = ancestor_type
+          AND dt.module = %(ancestor_type)s
         GROUP BY dt.module, dt.name""",
+		{"ancestor_type": ancestor_type},
 		as_dict=1,
 	)
 
@@ -32,7 +33,7 @@ def get_json(main_ancestor, ancestor_type="Accounts"):
 		)
 		custom_field_list = frappe.get_all(
 			"Custom Field",
-			filters={"parent": doc.doctype_name, "fieldtype": "Link"},
+			filters={"dt": doc.doctype_name, "fieldtype": "Link"},
 			fields="options",
 			group_by="options",
 		)

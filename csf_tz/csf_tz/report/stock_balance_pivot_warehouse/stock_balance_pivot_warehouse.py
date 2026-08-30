@@ -20,9 +20,8 @@ def execute(filters=None):
 	for sle in stock_ledger_entry:
 		row = [sle.item_code, sle.item_name, sle.brand, sle.item_group]
 
-		for e in warehouses:
-			row.append(sle_warehouse_map.get(sle.item_code, {}).get(e))
-		# row += [total_qty]
+		warehouse_qty = [flt(sle_warehouse_map.get(sle.item_code, {}).get(e)) for e in warehouses]
+		row += warehouse_qty + [sum(warehouse_qty)]
 
 		data.append(row)
 
@@ -98,7 +97,7 @@ def get_sle_warehouse_map(stock_ledger_entry):
 		"""select sle.item_code, sle.warehouse, sum(actual_qty)
 		from `tabStock Ledger Entry` sle
 		inner join `tabItem` i on sle.item_code = i.item_code
-		where item_code in ({})
+		where sle.item_code in ({})
 		group by i.item_name, i.brand, i.item_group, sle.warehouse""".format(
 			", ".join(["%s"] * len(stock_ledger_entry))
 		),

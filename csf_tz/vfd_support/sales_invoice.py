@@ -6,6 +6,7 @@ import re
 
 import erpnext
 import frappe
+from erpnext.controllers.taxes_and_totals import get_itemised_tax
 from frappe import _
 from frappe.utils import flt
 
@@ -111,10 +112,7 @@ def validate_cancel(doc, method):
 def get_itemised_tax_breakup_html(doc):
 	if not doc.taxes:
 		return
-
-	itemised_tax = get_itemised_tax_breakup_data(doc)
-	get_rounded_tax_amount(itemised_tax, doc.precision("tax_amount", "taxes"))
-	return itemised_tax
+	return get_itemised_tax_breakup_data(doc)
 
 
 def get_item_inclusive_amount(item):

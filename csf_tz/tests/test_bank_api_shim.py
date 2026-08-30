@@ -1,12 +1,12 @@
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from csf_tz import bank_api
 
 
-class TestBankApiShim(FrappeTestCase):
+class TestBankApiShim(IntegrationTestCase):
 	def test_throws_when_edu_tz_is_not_installed(self):
 		with patch("frappe.get_installed_apps", return_value=["frappe", "erpnext", "csf_tz"]):
 			with self.assertRaises(frappe.ValidationError):

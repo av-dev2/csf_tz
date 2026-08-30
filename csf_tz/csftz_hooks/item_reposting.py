@@ -2,35 +2,26 @@ import frappe
 from erpnext.accounts.utils import update_gl_entries_after
 from erpnext.stock.stock_ledger import update_entries_after
 from frappe import _
-from frappe.utils import today
+from frappe.utils import getdate, today
 from frappe.utils.background_jobs import enqueue
 
 
-def execute():
-	for doctype in (
-		"repost_item_valuation",
-		"stock_entry_detail",
-		"purchase_receipt_item",
-		"purchase_invoice_item",
-		"delivery_note_item",
-		"sales_invoice_item",
-		"packed_item",
-	):
-		frappe.reload_doc("stock", "doctype", doctype)
-	frappe.reload_doc("buying", "doctype", "purchase_receipt_item_supplied")
-
-	sle_gle_reposting_start_date = frappe.get_value(
-		"CSF TZ Settings", "CSF TZ Settings", "sle_gle_reposting_start_date"
-	)
-	if not sle_gle_reposting_start_date:
+def get_reposting_start_date():
+	"""Start date from CSF TZ Settings; throws when it is not set."""
+	start_date = frappe.get_single("CSF TZ Settings").sle_gle_reposting_start_date
+	if not start_date:
 		frappe.throw(
 			_("SLE GLE Reposting Start Date not set in {0}").format(
 				frappe.utils.get_url_to_form("CSF TZ Settings", "CSF TZ Settings")
 			)
 		)
-	reposting_project_deployed_on = sle_gle_reposting_start_date + " 00:00:00"
-	posting_date = sle_gle_reposting_start_date
+	return getdate(start_date)
+
+
+def execute():
+	posting_date = str(get_reposting_start_date())
 	posting_time = "00:00:00"
+	reposting_project_deployed_on = f"{posting_date} {posting_time}"
 
 	if posting_date == today():
 		return
@@ -100,14 +91,6 @@ def get_creation_time():
 
 @frappe.whitelist()
 def enqueue_reposting_sle_gle():
-	sle_gle_reposting_start_date = frappe.get_value(
-		"CSF TZ Settings", "CSF TZ Settings", "sle_gle_reposting_start_date"
-	)
-	if not sle_gle_reposting_start_date:
-		frappe.throw(
-			_("SLE GLE Reposting Start Date not set in {0}").format(
-				frappe.utils.get_url_to_form("CSF TZ Settings", "CSF TZ Settings")
-			)
-		)
+	get_reposting_start_date()
 	frappe.msgprint(_("Reposting of SLE and GLE started"), alert=True)
 	enqueue(method=execute, queue="long", timeout=10000, is_async=True)

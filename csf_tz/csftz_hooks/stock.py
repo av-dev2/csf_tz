@@ -3,6 +3,7 @@ import frappe
 # nosemgrep: frappe-semgrep-rules.rules.frappe-monkey-patching-not-allowed
 from erpnext.stock.doctype.stock_entry.stock_entry import StockEntry
 from frappe import _
+from frappe.utils import flt
 
 
 def validate_with_material_request(self):
@@ -33,15 +34,22 @@ def validate_with_material_request_override(doc, method):
 
 
 def import_from_bom(self, method):
-	if self.stock_entry_type == "Manufacture" and self.bom_no:
-		bom = frappe.get_doc("BOM", self.bom_no)
-		for d in bom.additional_costs:
-			self.append(
-				"additional_costs",
-				{
-					"expense_account": d.expense_account,
-					"amount": d.cost_per_unit,
-					"base_amount": d.cost_per_unit,
-					"description": d.cost_type,
-				},
-			)
+	"""Copy BOM additional costs (av_tools custom table) to the Stock Entry once."""
+	if self.stock_entry_type != "Manufacture" or not self.bom_no:
+		return
+	bom = frappe.get_doc("BOM", self.bom_no)
+	existing = {
+		(row.expense_account, row.description, flt(row.amount)) for row in self.get("additional_costs")
+	}
+	for d in bom.get("additional_costs") or []:
+		if (d.expense_account, d.cost_type, flt(d.cost_per_unit)) in existing:
+			continue
+		self.append(
+			"additional_costs",
+			{
+				"expense_account": d.expense_account,
+				"amount": d.cost_per_unit,
+				"base_amount": d.cost_per_unit,
+				"description": d.cost_type,
+			},
+		)

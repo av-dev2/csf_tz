@@ -133,6 +133,7 @@ def posting_all_vfd_invoices():
 
 			if vfd_provider.name == "VFDPlus":
 				vfdplus_post_fiscal_receipt(doc=doc, method="POST")
+				frappe.db.commit()
 
 			elif vfd_provider.name == "TotalVFD":
 				total_vfd_post_fiscal_receipt(doc=doc, method="POST")

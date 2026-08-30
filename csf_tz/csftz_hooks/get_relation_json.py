@@ -14,7 +14,7 @@ def get_json():
         UNION ALL
         SELECT CONCAT_WS('.', "erpnext", dt.module, dt.name) as name, dt.name as doctype_name
         FROM `tabDocType` dt
-        INNER JOIN `tabCustom Field` df ON dt.name = df.parent
+        INNER JOIN `tabCustom Field` df ON dt.name = df.dt
         WHERE df.options IS NOT NULL
         AND df.fieldtype = "Link"
         GROUP BY dt.module, dt.name""",
@@ -30,7 +30,7 @@ def get_json():
 		)
 		custom_field_list = frappe.get_all(
 			"Custom Field",
-			filters={"parent": doc.doctype_name, "fieldtype": "Link"},
+			filters={"dt": doc.doctype_name, "fieldtype": "Link"},
 			fields="options",
 			group_by="options",
 		)

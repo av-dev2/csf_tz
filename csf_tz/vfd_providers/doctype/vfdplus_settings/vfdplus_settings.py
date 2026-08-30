@@ -291,7 +291,6 @@ def post_fiscal_receipt(doc=None, method="POST", payload=None, invoice_id=None, 
 		frappe.db.set_value("Sales Invoice", doc.name, "vfd_time", data["msg_data"].get("itime"))
 		frappe.db.set_value("Sales Invoice", doc.name, "vfd_posting_info", vfd_provider_posting_doc.name)
 		frappe.db.set_value("Sales Invoice", doc.name, "vfd_verification_url", verification_url)
-		frappe.db.commit()
 
 	return {"data": data, "vfd_provider": "VFDPlus", "preview": preview}
 

@@ -25,16 +25,14 @@ frappe.query_reports["Warehouse wise Item Balance and Value"] = {
                         "label": __("Item Group"),
                         "fieldtype": "Link",
                         "width": "80",
-                        "options": "Item Group",
-						"default": "Vouchers"
+                        "options": "Item Group"
                 },
                 {
                         "fieldname": "brand",
                         "label": __("Brand"),
                         "fieldtype": "Link",
                         "width": "80",
-                        "options": "Brand",
-						"default": "Halotel"
+                        "options": "Brand"
                 },
                 {
                         "fieldname": "item_code",

@@ -4,6 +4,7 @@
 import erpnext
 import frappe
 from frappe import _
+from frappe.utils import cint
 from frappe.utils.nestedset import get_descendants_of
 
 
@@ -143,7 +144,9 @@ def get_conditions(filters, company_currency):
 	doc_status = {"Draft": 0, "Submitted": 1, "Cancelled": 2}
 
 	if filters.get("docstatus"):
-		conditions += "docstatus = {}".format(doc_status[filters.get("docstatus")])
+		conditions += "docstatus = {}".format(
+			doc_status.get(filters.get("docstatus"), cint(filters.get("docstatus")))
+		)
 
 	if filters.get("from_date"):
 		conditions += " and start_date >= %(from_date)s"

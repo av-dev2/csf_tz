@@ -40,15 +40,13 @@ def execute(filters=None):
 								tqi.item_name,
 								SUM(tqi.qty) AS total_qty,
 								COUNT(tq.name) AS quotations,
-								COUNT(DISTINCT customer_quot.customer) AS customers,
-								COUNT(DISTINCT tq.lead) AS leads,
+								COUNT(DISTINCT CASE WHEN tq.quotation_to = 'Customer' THEN tq.party_name END) AS customers,
+								COUNT(DISTINCT CASE WHEN tq.quotation_to = 'Lead' THEN tq.party_name END) AS leads,
 								tqi.warehouse
 							FROM
 								(`tabQuotation Item` tqi)
 							LEFT JOIN
 								(`tabQuotation` tq) ON (tqi.parent = tq.name)
-							LEFT JOIN
-								(`tabQuotation` customer_quot) ON tqi.parent = customer_quot.name AND customer_quot.quotation_to = 'Customer'
 							WHERE
 								tq.docstatus = 1 AND tq.transaction_date BETWEEN %(from_date)s AND %(to_date)s
 							GROUP BY tqi.item_code, tqi.warehouse

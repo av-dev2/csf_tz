@@ -9,7 +9,8 @@ frappe.query_reports["Accounts Receivable Summary Multi Currency"] = {
 			"label": __("Company"),
 			"fieldtype": "Link",
 			"options": "Company",
-			"default": frappe.defaults.get_user_default("Company")
+			"default": frappe.defaults.get_user_default("Company"),
+			"reqd": 1
 		},
 		{
 			"fieldname":"ageing_based_on",

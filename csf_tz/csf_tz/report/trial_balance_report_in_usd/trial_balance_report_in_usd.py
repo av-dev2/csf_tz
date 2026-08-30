@@ -92,10 +92,10 @@ def get_data(filters):
 		filters.company,
 		filters.from_date,
 		filters.to_date,
-		min_lft,
-		max_rgt,
 		filters,
 		gl_entries_by_account,
+		root_lft=min_lft,
+		root_rgt=max_rgt,
 		ignore_closing_entries=not flt(filters.with_period_closing_entry),
 	)
 

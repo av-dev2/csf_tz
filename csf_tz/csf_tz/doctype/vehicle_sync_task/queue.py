@@ -1,9 +1,12 @@
-```
+import os
+import socket
+
 import frappe
 
 BATCH_SIZE = 1
 SUCCESS_INTERVAL_SECONDS = 60 * 60 * 24
 MAX_CALLS_PER_MINUTE = 1
+WORKER_ID = f"{socket.gethostname()}:{os.getpid()}"
 
 
 def _now():

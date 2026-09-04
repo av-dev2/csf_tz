@@ -38,7 +38,6 @@
    "fieldtype": "Column Break"
   },
   {
-   "fetch_from": "payment_entry.paid_amount",
    "fieldname": "payment_amount_foreign",
    "fieldtype": "Currency",
    "in_list_view": 1,
@@ -58,7 +57,6 @@
    "fieldtype": "Section Break"
   },
   {
-   "fetch_from": "payment_entry.source_exchange_rate",
    "fieldname": "payment_exchange_rate",
    "fieldtype": "Float",
    "label": "Payment Exchange Rate",
@@ -70,12 +68,14 @@
    "fieldtype": "Column Break"
   },
   {
+   "allow_on_submit": 1,
    "fieldname": "exchange_difference",
    "fieldtype": "Currency",
    "label": "Exchange Difference",
    "read_only": 1
   },
   {
+   "allow_on_submit": 1,
    "default": "0",
    "fieldname": "journal_entry_created",
    "fieldtype": "Check",

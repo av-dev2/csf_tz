@@ -44,7 +44,7 @@ def create_order_minimal():
 	# API endpoint
 	orderPath = "/checkout/create-order-minimal"
 
-	# Send order request
+	response = {}
 	try:
 		response = client.postFunc(orderPath, orderDict)
 		if response.get("resultcode") != "000":

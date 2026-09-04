@@ -5,6 +5,8 @@ import frappe
 from frappe.model.document import Document
 from frappe.utils import flt
 
+from csf_tz.csftz_hooks.exchange_calculations import get_payment_foreign_amount_and_rate
+
 
 class ForeignImportTransaction(Document):
 	def validate(self):
@@ -14,6 +16,10 @@ class ForeignImportTransaction(Document):
 
 	def on_submit(self):
 		self.update_status("Active")
+
+	def before_update_after_submit(self):
+		self.calculate_totals()
+		self.set_status()
 
 	def on_cancel(self):
 		self.cancel_related_journal_entries()
@@ -107,14 +113,12 @@ class ForeignImportTransaction(Document):
 		payment_row = self.append("payments", {})
 		payment_row.payment_entry = payment_entry
 		payment_row.payment_date = payment_doc.posting_date
-		payment_row.payment_amount_foreign = payment_doc.paid_amount
+		paid_amount, payment_rate = get_payment_foreign_amount_and_rate(self, payment_doc)
+		payment_row.payment_amount_foreign = paid_amount
 		payment_row.payment_amount_base = payment_doc.base_paid_amount
-		payment_row.payment_exchange_rate = payment_doc.source_exchange_rate
+		payment_row.payment_exchange_rate = payment_rate
 
-		# Calculate exchange difference
 		original_rate = flt(self.original_exchange_rate)
-		payment_rate = flt(payment_doc.source_exchange_rate)
-		paid_amount = flt(payment_doc.paid_amount)
 
 		if original_rate != payment_rate:
 			exchange_diff = paid_amount * (payment_rate - original_rate)
@@ -131,7 +135,7 @@ class ForeignImportTransaction(Document):
 		lcv_row.landed_cost_voucher = lcv_name
 		lcv_row.lcv_date = lcv_doc.posting_date
 		lcv_row.lcv_amount_base = lcv_doc.total_taxes_and_charges
-		lcv_row.exchange_rate_used = flt(lcv_doc.get("conversion_rate", 1))
+		lcv_row.exchange_rate_used = flt(lcv_doc.get("conversion_rate")) or 1
 
 		# Get allocated amount from LCV items
 		allocated_amount = 0

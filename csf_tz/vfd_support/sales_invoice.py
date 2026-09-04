@@ -132,37 +132,7 @@ def get_item_inclusive_amount(item):
 
 @erpnext.allow_regional
 def get_itemised_tax_breakup_data(doc):
-	itemised_tax = get_itemised_tax(doc)
-	return itemised_tax
-
-
-def get_itemised_tax(doc, with_tax_account=False):
-	itemised_tax = {}
-	for row in doc.get("_item_wise_tax_details") or []:
-		item = row.get("item")
-		tax = row.get("tax")
-		if not item or not tax:
-			continue
-		if getattr(tax, "category", None) and tax.category == "Valuation":
-			continue
-
-		item_code = item.item_code or item.item_name
-		tax_info = itemised_tax.setdefault(item_code, frappe._dict()).setdefault(
-			tax.description, frappe._dict(tax_rate=flt(row.rate), tax_amount=0.0)
-		)
-		tax_info.tax_amount += flt(row.amount)
-
-		if with_tax_account:
-			tax_info.tax_account = tax.account_head
-
-	return itemised_tax
-
-
-def get_rounded_tax_amount(itemised_tax, precision):
-	# Rounding based on tax_amount precision
-	for taxes in itemised_tax.values():
-		for tax_account in taxes:
-			taxes[tax_account]["tax_amount"] = flt(taxes[tax_account]["tax_amount"], precision)
+	return get_itemised_tax(doc)
 
 
 def remove_special_characters(text):

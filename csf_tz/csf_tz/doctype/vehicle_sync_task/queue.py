@@ -55,7 +55,7 @@ def claim_batch(doctype, limit=BATCH_SIZE):
 				row["name"],
 				{
 					"status": "Processing",
-					"claimed_by": WORKER_ID,
+					"claimed_by": "",
 					"claimed_at": now,
 					"last_run_at": now,
 				},
@@ -140,3 +140,4 @@ def reset_stuck_tasks(doctype, timeout_minutes=10):
 			message=f"Error resetting stuck tasks in {doctype}: {str(e)}",
 		)
 		return 0
+```

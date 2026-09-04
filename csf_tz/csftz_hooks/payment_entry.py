@@ -7,6 +7,7 @@ import frappe
 from erpnext.accounts.doctype.payment_entry.payment_entry import (
 	get_negative_outstanding_invoices,
 	get_orders_to_be_billed,
+	split_refdocs_based_on_payment_terms,
 )
 from erpnext.accounts.utils import get_account_currency, get_outstanding_invoices
 from erpnext.controllers.accounts_controller import get_supplier_block_status
@@ -89,11 +90,7 @@ def get_outstanding_reference_documents(args):
 		max_outstanding=args.get("outstanding_amt_less_than"),
 		accounting_dimensions=accounting_dimensions_filter,
 	)
-	from erpnext.accounts.doctype.payment_entry.payment_entry import (
-		split_invoices_based_on_payment_terms,
-	)
-
-	outstanding_invoices = split_invoices_based_on_payment_terms(outstanding_invoices, args.get("company"))
+	outstanding_invoices = split_refdocs_based_on_payment_terms(outstanding_invoices, args.get("company"))
 
 	for d in outstanding_invoices:
 		d["exchange_rate"] = 1

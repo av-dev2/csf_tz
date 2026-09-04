@@ -6,6 +6,7 @@ import re
 
 import erpnext
 import frappe
+from erpnext.controllers.taxes_and_totals import get_itemised_tax
 from frappe import _
 from frappe.utils import flt
 
@@ -111,10 +112,7 @@ def validate_cancel(doc, method):
 def get_itemised_tax_breakup_html(doc):
 	if not doc.taxes:
 		return
-
-	itemised_tax = get_itemised_tax_breakup_data(doc)
-	get_rounded_tax_amount(itemised_tax, doc.precision("tax_amount", "taxes"))
-	return itemised_tax
+	return get_itemised_tax_breakup_data(doc)
 
 
 def get_item_inclusive_amount(item):
@@ -134,45 +132,7 @@ def get_item_inclusive_amount(item):
 
 @erpnext.allow_regional
 def get_itemised_tax_breakup_data(doc):
-	itemised_tax = get_itemised_tax(doc.taxes)
-	return itemised_tax
-
-
-def get_itemised_tax(taxes, with_tax_account=False):
-	itemised_tax = {}
-	for tax in taxes:
-		if getattr(tax, "category", None) and tax.category == "Valuation":
-			continue
-
-		item_tax_map = json.loads(tax.item_wise_tax_detail) if tax.item_wise_tax_detail else {}
-		if item_tax_map:
-			for item_code, tax_data in item_tax_map.items():
-				itemised_tax.setdefault(item_code, frappe._dict())
-
-				tax_rate = 0.0
-				tax_amount = 0.0
-
-				if isinstance(tax_data, list):
-					tax_rate = flt(tax_data[0])
-					tax_amount = flt(tax_data[1])
-				else:
-					tax_rate = flt(tax_data)
-
-				itemised_tax[item_code][tax.description] = frappe._dict(
-					dict(tax_rate=tax_rate, tax_amount=tax_amount)
-				)
-
-				if with_tax_account:
-					itemised_tax[item_code][tax.description].tax_account = tax.account_head
-
-	return itemised_tax
-
-
-def get_rounded_tax_amount(itemised_tax, precision):
-	# Rounding based on tax_amount precision
-	for taxes in itemised_tax.values():
-		for tax_account in taxes:
-			taxes[tax_account]["tax_amount"] = flt(taxes[tax_account]["tax_amount"], precision)
+	return get_itemised_tax(doc)
 
 
 def remove_special_characters(text):

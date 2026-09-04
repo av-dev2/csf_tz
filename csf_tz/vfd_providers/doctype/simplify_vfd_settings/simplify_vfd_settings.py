@@ -292,7 +292,6 @@ def post_fiscal_receipt(doc=None, method="POST", payload=None, invoice_id=None, 
 			"Comment",
 			f"VFD Invoice ID: {res_data.get('invoiceId')}",
 		)
-		frappe.db.commit()
 
 	return {"data": res_data, "vfd_provider": "SimplifyVFD", "preview": preview}
 

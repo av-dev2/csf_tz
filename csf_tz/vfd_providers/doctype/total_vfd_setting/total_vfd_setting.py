@@ -177,7 +177,6 @@ def post_fiscal_receipt(doc=None, method="POST", payload=None, invoice_id=None, 
 			"vfd_verification_url",
 			data.get("verificationLink"),
 		)
-		frappe.db.commit()
 
 	return {"data": data, "vfd_provider": "TotalVFD", "preview": preview}
 

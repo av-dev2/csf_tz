@@ -7,6 +7,7 @@
  "field_order": [
   "posting_date",
   "payment_type",
+  "file_reference",
   "originator_conversation_id",
   "column_break_erfa",
   "debit_account",
@@ -53,6 +54,12 @@
    "label": "Payment Type",
    "options": "\nSupplier\nSalary",
    "reqd": 1
+  },
+  {
+   "description": "Optional. Used as the payment file name sent to KCB, e.g. \"TRA MONTHLY SALARY AUGUST 2026\". Leave blank to use the system-generated name.",
+   "fieldname": "file_reference",
+   "fieldtype": "Data",
+   "label": "File Name"
   },
   {
    "fieldname": "originator_conversation_id",

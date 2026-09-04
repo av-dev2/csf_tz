@@ -17,7 +17,7 @@ def _get_bank_account_details(bank_account_name: str | None) -> dict:
 		frappe.get_value(
 			"Bank Account",
 			bank_account_name,
-			["bank_account_no", "kcb_beneficiary_clearing_code", "bank"],
+			["account_name", "bank_account_no", "kcb_beneficiary_clearing_code", "bank"],
 			as_dict=True,
 		)
 		or {}
@@ -237,7 +237,7 @@ def make_kcb_payments_initiation_from_payment_entries(payment_entries):
 		row = doc.append("kcb_payments_initiation_info", {})
 		row.source_doctype = "Payment Entry"
 		row.source_name = pe.name
-		row.beneficiary_name = pe.party_name or pe.party
+		row.beneficiary_name = party_bank_details.get("account_name") or pe.party_name or pe.party
 		row.amount = pe.paid_amount
 		row.currency = currency
 		row.beneficiary_account = beneficiary_account or ""

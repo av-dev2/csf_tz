@@ -1,6 +1,6 @@
-exclude: 'node_modules|.git|frappe-semgrep-rules'
+exclude: '^(node_modules/|frappe-semgrep-rules/|[.]vscode/|.*/node_modules/)'
 default_stages: [pre-commit]
-default_install_hook_types: [pre-commit, commit-msg]
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
 fail_fast: false
 
 repos:
@@ -18,6 +18,20 @@ repos:
       - id: check-toml
       - id: check-yaml
       - id: debug-statements
+      - id: no-commit-to-branch
+        args:
+          - --branch
+          - main
+          - --branch
+          - master
+          - --branch
+          - production
+          - --branch
+          - version-14
+          - --branch
+          - version-15
+          - --branch
+          - version-16
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.11.0
@@ -25,13 +39,16 @@ repos:
       - id: ruff
         name: "Run ruff import sorter"
         args: ["--select=I", "--fix"]
+        files: '^csf_tz/.*\.py$'
 
       - id: ruff
         name: "Run ruff linter"
         args: ["--fix"]
+        files: '^csf_tz/.*\.py$'
 
       - id: ruff-format
         name: "Run ruff formatter"
+        files: '^csf_tz/.*\.py$'
 
   - repo: local
     hooks:
@@ -45,6 +62,15 @@ repos:
         pass_filenames: true
         require_serial: true
 
+      - id: full-repository-check
+        name: "Full repository check before push"
+        entry: bash -c 'if command -v pre-commit >/dev/null 2>&1; then exec pre-commit run --all-files --hook-stage pre-commit --show-diff-on-failure --color=always; else exec python3 -m pre_commit run --all-files --hook-stage pre-commit --show-diff-on-failure --color=always; fi'
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+        always_run: true
+        verbose: true
+
   - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
     rev: v9.22.0
     hooks:
@@ -54,5 +80,5 @@ repos:
 
 ci:
     autoupdate_schedule: weekly
-    skip: [frappe-semgrep-rules]
+    skip: [frappe-semgrep-rules, full-repository-check]
     submodules: false

@@ -7,6 +7,9 @@ from frappe.utils import flt
 
 
 def execute(filters=None):
+	if not frappe.db.exists("DocType", "Loan Repayment"):
+		frappe.throw(_("The Lending app is not installed on this site"))
+
 	loans = []
 	data = []
 	columns = get_columns(filters)

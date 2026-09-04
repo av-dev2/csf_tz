@@ -175,7 +175,7 @@ def get_stock_ledger_entries(filters, items):
             sle.company, sle.voucher_type, sle.qty_after_transaction, sle.stock_value_difference,
             sle.item_code as name, sle.voucher_no, sle.stock_value, 0 as excise_stock
         from
-            `tabStock Ledger Entry` sle force index (posting_sort_index)
+            `tabStock Ledger Entry` sle
         inner join `tabStock Entry` se on sle.voucher_type = "Stock Entry" and se.name = sle.voucher_no
         inner join `tabItem` i on sle.item_code = i.name
         where sle.is_cancelled = 0
@@ -188,7 +188,7 @@ def get_stock_ledger_entries(filters, items):
             sle.company, sle.voucher_type, sle.qty_after_transaction, sle.stock_value_difference,
             sle.item_code as name, sle.voucher_no, sle.stock_value, sle.actual_qty * si.excise_duty_applicable as excise_stock
         from
-            `tabStock Ledger Entry` sle force index (posting_sort_index)
+            `tabStock Ledger Entry` sle
         inner join `tabSales Invoice` si on sle.voucher_type = "Sales Invoice" and si.name = sle.voucher_no
         inner join `tabItem` i on sle.item_code = i.name
         where sle.is_cancelled = 0
@@ -200,7 +200,7 @@ def get_stock_ledger_entries(filters, items):
             sle.company, sle.voucher_type, sle.qty_after_transaction, sle.stock_value_difference,
             sle.item_code as name, sle.voucher_no, sle.stock_value, 0 as excise_stock
         from
-            `tabStock Ledger Entry` sle force index (posting_sort_index)
+            `tabStock Ledger Entry` sle
         inner join `tabItem` i on sle.item_code = i.name
         where sle.is_cancelled = 0
             and sle.voucher_type NOT IN ("Stock Entry", "Sales Invoice")

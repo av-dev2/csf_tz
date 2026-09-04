@@ -2,16 +2,10 @@
 # For license information, please see license.txt
 
 import frappe
-from erpnext.stock.report.stock_ageing.stock_ageing import get_average_age, get_fifo_queue
-from erpnext.stock.report.stock_balance.stock_balance import (
-	get_item_details,
-	get_item_warehouse_map,
-	get_items,
-	get_stock_ledger_entries,
-)
+from erpnext.stock.report.stock_ageing.stock_ageing import FIFOSlots, get_average_age
+from erpnext.stock.report.stock_balance.stock_balance import StockBalanceReport
 from frappe import _
 from frappe.utils import flt
-from six import iteritems
 
 
 def execute(filters=None):
@@ -21,41 +15,16 @@ def execute(filters=None):
 	validate_filters(filters)
 
 	columns = get_columns(filters)
-
-	items = get_items(filters)
-	sle = get_stock_ledger_entries(filters, items)
-
-	item_map = get_item_details(items, sle, filters)
-	iwb_map = get_item_warehouse_map(filters, sle)
 	warehouse_list = get_warehouse_list(filters)
-	item_ageing = get_fifo_queue(filters)
+	item_ageing = FIFOSlots(filters).generate()
+	item_balance, item_value, item_groups = get_item_wise_balances(filters, warehouse_list)
 	data = []
-	item_balance = {}
-	item_value = {}
 
-	for company, item, warehouse in sorted(iwb_map):
-		if not item_map.get(item):
-			continue
-
-		row = []
-		qty_dict = iwb_map[(company, item, warehouse)]
-		item_balance.setdefault((item, item_map[item]["item_group"]), [])
-		total_stock_value = 0.00
-		for wh in warehouse_list:
-			row += [qty_dict.bal_qty] if wh.name in warehouse else [0.00]
-			total_stock_value += qty_dict.bal_val if wh.name in warehouse else 0.00
-
-		item_balance[(item, item_map[item]["item_group"])].append(row)
-		item_value.setdefault((item, item_map[item]["item_group"]), [])
-		item_value[(item, item_map[item]["item_group"])].append(total_stock_value)
-
-	# sum bal_qty by item
-	for (item, item_group), wh_balance in iteritems(item_balance):
+	for item, wh_balance in item_balance.items():
 		if not item_ageing.get(item):
 			continue
 
-		total_stock_value = sum(item_value[(item, item_group)])
-		row = [item, item_group, total_stock_value]
+		row = [item, item_groups[item], sum(item_value[item])]
 
 		fifo_queue = item_ageing[item]["fifo_queue"]
 		average_age = 0.00
@@ -64,22 +33,36 @@ def execute(filters=None):
 
 		row += [average_age]
 
-		bal_qty = [sum(bal_qty) for bal_qty in zip(*wh_balance, strict=False)]
+		bal_qty = [sum(qty) for qty in zip(*wh_balance, strict=False)]
 		total_qty = sum(bal_qty)
 		if len(warehouse_list) > 1:
 			row += [total_qty]
 		row += bal_qty
 
-		if total_qty > 0:
+		if total_qty > 0 or not filters.get("filter_total_zero_qty"):
 			data.append(row)
-		elif not filters.get("filter_total_zero_qty"):
-			data.append(row)
-	# frappe.msgprint("Debug start")
-	# frappe.msgprint(str(data))
+
 	add_warehouse_column(columns, warehouse_list)
 	check_zero_total_qty(columns, data)
-	# frappe.msgprint(str(columns) + " " + str(data))
 	return columns, data
+
+
+def get_item_wise_balances(filters, warehouse_list):
+	"""Group the ERPNext stock balance rows by item, one qty per warehouse column."""
+	item_balance, item_value, item_groups = {}, {}, {}
+	report = StockBalanceReport(frappe._dict(filters, include_zero_stock_items=1))
+	_columns, balances = report.run()
+
+	for entry in sorted(balances, key=lambda d: (d.item_code, d.warehouse)):
+		row = [flt(entry.bal_qty) if wh.name == entry.warehouse else 0.00 for wh in warehouse_list]
+		total_stock_value = (
+			flt(entry.bal_val) if entry.warehouse in [wh.name for wh in warehouse_list] else 0.00
+		)
+		item_balance.setdefault(entry.item_code, []).append(row)
+		item_value.setdefault(entry.item_code, []).append(total_stock_value)
+		item_groups[entry.item_code] = entry.item_group
+
+	return item_balance, item_value, item_groups
 
 
 def get_columns(_filters):
@@ -134,24 +117,19 @@ def add_warehouse_column(columns, warehouse_list):
 
 
 def check_zero_total_qty(columns, data):
+	"""Drop warehouse columns whose quantity is zero on every row."""
 	zero_qty_columns = []
-	# frappe.msgprint("Number of rows: " + str(len(data)) + " and number of columns " + str(len(columns)))
 	for column_num in range(5, len(columns)):
 		column_total = 0
 		for row_num in range(0, len(data)):
-			# frappe.msgprint("row " + str(row_num + 1) + " column " + str(column_num + 1) + " value" + str(data[row_num][column_num]))
 			column_total += data[row_num][column_num]
 		if column_total == 0:
 			zero_qty_columns.append(column_num)
-	# frappe.msgprint("These columns should be removed: " + str(zero_qty_columns))
 
 	if len(zero_qty_columns) > 0:
-		# frappe.msgprint("Total number of columns to be deleted: " + str(len(zero_qty_columns)))
 		index = 0
 		for col_num in zero_qty_columns:
-			# frappe.msgprint("Deleting column " + str(col_num - index))
 			for row in data:
 				del row[col_num - index]
 			del columns[col_num - index]
 			index += 1
-	# frappe.msgprint(str(columns) + " " + str(data))

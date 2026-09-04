@@ -25,7 +25,7 @@ frappe.query_reports["Shipment Tracking"] = {
 			"fieldname":"order",
 			"label": __("Order"),
 			"fieldtype": "Link",
-			"options": "Order Tracking",
+			"options": "Order Track",
 		},
 /*		{
 			"fieldname":"purchase_order",

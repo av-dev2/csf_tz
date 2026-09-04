@@ -5,7 +5,7 @@
 import erpnext
 import frappe
 from frappe import _
-from frappe.utils import flt
+from frappe.utils import cint, flt
 from frappe.utils.nestedset import get_descendants_of
 
 
@@ -386,7 +386,9 @@ def get_salary_slips(filters):
 	query = frappe.qb.from_(salary_slip).select(salary_slip.star)
 
 	if filters.get("docstatus"):
-		query = query.where(salary_slip.docstatus == doc_status[filters.get("docstatus")])
+		query = query.where(
+			salary_slip.docstatus == doc_status.get(filters.get("docstatus"), cint(filters.get("docstatus")))
+		)
 
 	if filters.get("from_date"):
 		query = query.where(salary_slip.start_date >= filters.get("from_date"))

@@ -6,6 +6,9 @@ from frappe import _
 
 
 def execute(filters=None):
+	if not frappe.get_meta("Sales Invoice").has_field("lease_item"):
+		frappe.throw(_("Custom field Sales Invoice.lease_item is not installed on this site"))
+
 	rental = filters.get("rental")
 	columns, data = get_columns(rental), []
 

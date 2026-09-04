@@ -20,7 +20,14 @@ class TestRemovedModuleGuards(IntegrationTestCase):
 		self.addCleanup(frappe.db.rollback)
 
 	def make_doctype(self, name):
-		"""A custom DocType stands in for a retired one; its module folder is long gone."""
+		"""A custom DocType stands in for a retired one; its module folder is long gone.
+
+		Creating one issues DDL, which commits, so rolling the transaction back is not enough
+		to undo it. Drop it explicitly or the next run hits a duplicate entry.
+		"""
+		self.drop_doctype(name)
+		self.addCleanup(self.drop_doctype, name)
+
 		frappe.get_doc(
 			{
 				"doctype": "DocType",
@@ -31,6 +38,13 @@ class TestRemovedModuleGuards(IntegrationTestCase):
 				"permissions": [{"role": "System Manager"}],
 			}
 		).insert(ignore_permissions=True)
+
+	def drop_doctype(self, name):
+		frappe.db.delete("DocType", {"name": name})
+		frappe.db.delete("DocField", {"parent": name})
+		frappe.db.delete("DocPerm", {"parent": name})
+		frappe.db.sql_ddl(f"DROP TABLE IF EXISTS `tab{name}`")
+		frappe.db.commit()
 
 	def test_csf_tz_is_never_its_own_owner(self):
 		self.assertNotIn(APP_NAME, set(self.owners.values()))

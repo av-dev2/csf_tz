@@ -271,6 +271,7 @@ scheduler_events = {
 		],
 		"*/10 * * * *": [
 			"csf_tz.vfd_providers.doctype.simplify_vfd_settings.simplify_vfd_settings.get_access_token",
+			"csf_tz.vfd_providers.doctype.dirm_vfd_settings.dirm_vfd_settings.refresh_session_tokens",
 		],
 		"0 */12 * * *": [
 			"csf_tz.vfd_providers.doctype.simplify_vfd_settings.simplify_vfd_settings.get_refresh_token",

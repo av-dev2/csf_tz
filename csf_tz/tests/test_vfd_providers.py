@@ -216,11 +216,13 @@ class TestVFDPlusProvider(IntegrationTestCase):
 		)
 
 	def test_unsupported_provider_throws(self):
+		# Dispatch keys on the settings doctype, so a provider is unsupported when
+		# no handler owns that doctype. The record name is free to be anything.
 		frappe.get_doc(
 			{
 				"doctype": "VFD Provider",
 				"vfd_provider": "OtherVFD",
-				"vfd_provider_settings": "VFDPlus Settings",
+				"vfd_provider_settings": "ToDo",
 			}
 		).insert()
 		set_company_provider("OtherVFD")

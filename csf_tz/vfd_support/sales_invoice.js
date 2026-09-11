@@ -47,12 +47,16 @@ function _generate_vfd(frm) {
 
       if (data && !preview) {
         frm.reload_doc();
-        frappe.show_alert({
-          message: __("VFD successfully sent to TRA"),
-          indicator: "green",
-        });
+        if (r.message.success === false) {
+          show_vfd_not_sent(data);
+        } else {
+          frappe.show_alert({
+            message: __("VFD successfully sent to TRA"),
+            indicator: "green",
+          });
+        }
       } else if (data && preview) {
-        show_vfd_preview_dialog(frm, data, vfd_provider);
+        show_vfd_preview_dialog(frm, data, vfd_provider, r.message.post_method);
       } else if (!data) {
         frappe.msgprint(__("VFD generation failed"));
       }
@@ -63,7 +67,30 @@ function _generate_vfd(frm) {
   });
 }
 
-function show_vfd_preview_dialog(frm, payload, vfd_provider) {
+function show_vfd_not_sent(data) {
+  // Accounts users cannot read the Error Log, so the reason has to reach the screen.
+  const reason =
+    (data && (data.statusDesc || data.message || data.msg || data.error)) || "";
+
+  frappe.show_alert({
+    message: __("VFD was not sent to TRA"),
+    indicator: "red",
+  });
+
+  frappe.msgprint({
+    title: __("VFD Not Sent to TRA"),
+    message: reason
+      ? __("This invoice was not sent to TRA.<br><br><b>Reason:</b> {0}", [
+          frappe.utils.escape_html(String(reason)),
+        ])
+      : __(
+          "This invoice was not sent to TRA and no reason was returned. Ask your system administrator to check the VFD Provider Posting record."
+        ),
+    indicator: "red",
+  });
+}
+
+function show_vfd_preview_dialog(frm, payload, vfd_provider, method) {
   // Some providers (esp. VFDPlus) may return payload as serialized JSON string.
   if (payload && typeof payload === 'string') {
     try {
@@ -72,13 +99,20 @@ function show_vfd_preview_dialog(frm, payload, vfd_provider) {
       // Leave as-is; normalization will handle empty objects safely.
     }
   }
-  // Normalize differing payload structures across providers (SimplifyVFD, VFDPlus, TotalVFD)
+  // Normalize differing payload structures across providers (SimplifyVFD, VFDPlus, TotalVFD, DIRMVFD)
   function normalizePayload(raw, provider) {
     const p = raw || {};
     // Customer object differences
     let customerObj = p.customer || {};
     if (provider === "VFDPlus") {
       customerObj = p.customer_info || {};
+    } else if (provider === "DIRMVFD") {
+      customerObj = {
+        name: p.custName,
+        idType: p.custIdType,
+        idValue: p.custId,
+        vrn: p.vrn,
+      };
     }
 
     const customerName = customerObj.name || customerObj.cust_name || customerObj.customerName || '';
@@ -87,7 +121,8 @@ function show_vfd_preview_dialog(frm, payload, vfd_provider) {
     const vatRegistrationNumber = customerObj.vatRegistrationNumber || customerObj.cust_vrn || customerObj.vrn || '';
 
     // Invoice / reference id key differences
-    const partnerInvoiceId = p.partnerInvoiceId || p.trans_no || p.referenceNumber || frm.doc.name;
+    const partnerInvoiceId =
+      p.partnerInvoiceId || p.trans_no || p.referenceNumber || p.unique_id || frm.doc.name;
     const invoiceAmountType = p.invoiceAmountType || p.amountType || '';
 
     // Date / time differences
@@ -104,13 +139,21 @@ function show_vfd_preview_dialog(frm, payload, vfd_provider) {
     // Items arrays differences
     let items = [];
     if (Array.isArray(p.items)) {
-      items = p.items.map(it => ({
-        description: it.description || it.name || it.item_name || '',
-        quantity: it.quantity || it.qty || it.item_qty || 0,
-        unitAmount: it.unitAmount || parseFloat((it.price / (it.qty || 1)).toFixed(2)) || it.usp || 0,
-        taxType: (it.taxType || it.vatGroup || it.vat_rate_code || '').toString(),
-        _raw: it,
-      }));
+      items = p.items.map(it => {
+        const quantity = it.quantity || it.qty || it.item_qty || 0;
+        // DIRM VFD sends the whole line in amt, the preview shows a unit amount.
+        const unitAmount = provider === "DIRMVFD"
+          ? flt((it.amt || 0) / (quantity || 1), 2)
+          : it.unitAmount || parseFloat((it.price / (it.qty || 1)).toFixed(2)) || it.usp || 0;
+
+        return {
+          description: it.description || it.name || it.item_name || it.desc || '',
+          quantity: quantity,
+          unitAmount: unitAmount,
+          taxType: (it.taxType || it.vatGroup || it.vat_rate_code || it.taxCode || '').toString(),
+          _raw: it,
+        };
+      });
     } else if (Array.isArray(p.cart_items)) { // VFDPlus
       items = p.cart_items.map(it => ({
         description: it.description || it.item_name || '',
@@ -174,6 +217,12 @@ function show_vfd_preview_dialog(frm, payload, vfd_provider) {
       taxAmount += lineTotal - netLineTotal;
     }
   });
+
+  const declaredTotals = (payload && payload.totals) || null;
+  if (declaredTotals) {
+    totalIncl = flt(declaredTotals.totalTaxIncl);
+    taxAmount = flt(declaredTotals.totalTax);
+  }
 
   let totalExcl = totalIncl - taxAmount;
 
@@ -295,15 +344,6 @@ function show_vfd_preview_dialog(frm, payload, vfd_provider) {
     <div class="vfd-footer">Please verify the above details before sending to TRA.</div>
   </div>`;
 
-  let method = ''
-  if (vfd_provider === "VFDPlus") {
-    method = "csf_tz.vfd_providers.doctype.vfdplus_settings.vfdplus_settings.post_fiscal_receipt"
-  } else if (vfd_provider === "TotalVFD") {
-    method = "csf_tz.vfd_providers.doctype.total_vfd_setting.total_vfd_setting.post_fiscal_receipt"
-  } else if (vfd_provider === "SimplifyVFD") {
-    method = "csf_tz.vfd_providers.doctype.simplify_vfd_settings.simplify_vfd_settings.post_fiscal_receipt"
-  }
-
   let d = new frappe.ui.Dialog({
     title: __("VFD Receipt Preview"),
     fields: [
@@ -330,16 +370,13 @@ function show_vfd_preview_dialog(frm, payload, vfd_provider) {
         .then((res) => {
             d.hide();
             frm.reload_doc();
-            if (res.message.data) {
+            if (res.message.data && res.message.success !== false) {
               frappe.show_alert({
                 message: __("VFD successfully sent to TRA"),
                 indicator: "green",
               });
             } else {
-              frappe.show_alert({
-                message: __("VFD sending completed with errors"),
-                indicator: "orange",
-              });
+              show_vfd_not_sent(res.message.data);
             }
         })
     },

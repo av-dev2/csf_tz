@@ -92,7 +92,7 @@ def get_item_taxcode(item_tax_template=None, item_code=None, invoice_name=None):
 
 	taxcode = None
 	if item_tax_template:
-		vfd_taxcode = frappe.get_value("Item Tax Template", item_tax_template, "vfd_taxcode")
+		vfd_taxcode = frappe.get_cached_value("Item Tax Template", item_tax_template, "vfd_taxcode")
 		if vfd_taxcode:
 			taxcode = int(vfd_taxcode[:1])
 		else:

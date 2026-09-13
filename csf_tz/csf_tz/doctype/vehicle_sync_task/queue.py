@@ -55,7 +55,7 @@ def claim_batch(doctype, limit=BATCH_SIZE):
 				row["name"],
 				{
 					"status": "Processing",
-					"claimed_by": "",
+					"claimed_by": WORKER_ID,
 					"claimed_at": now,
 					"last_run_at": now,
 				},

@@ -542,111 +542,104 @@ def update_delivery_on_sales_invoice(doc, method):
 
 
 def get_delivery_note_item_count(item_row_name, sales_invoice):
-	query = f""" SELECT SUM(stock_qty) as cont
-            FROM `tabDelivery Note Item`
-            WHERE
-                si_detail = '{item_row_name}'
-                AND docstatus != 2
-                AND against_sales_invoice = '{sales_invoice}'
-            """
+	from frappe.query_builder.functions import Sum
 
-	counts = frappe.db.sql(query, as_dict=True)
-	if len(counts) > 0 and counts[0]["cont"]:
-		return float(counts[0]["cont"])
+	item = frappe.qb.DocType("Delivery Note Item")
+	result = (
+		frappe.qb.from_(item)
+		.select(Sum(item.stock_qty).as_("cont"))
+		.where(item.si_detail == item_row_name)
+		.where(item.docstatus != 2)
+		.where(item.against_sales_invoice == sales_invoice)
+		.run(as_dict=True)
+	)
+	return float(result[0].cont) if result and result[0].cont else 0
+
+
+def _pending_delivery_note_items_query(automatic=False):
+	"""Return eligible invoice-item rows using a composable, parameterized query."""
+	from frappe.query_builder.functions import Coalesce, Sum
+	from pypika.analytics import RowNumber
+
+	si = frappe.qb.DocType("Sales Invoice")
+	sit = frappe.qb.DocType("Sales Invoice Item")
+	item = frappe.qb.DocType("Item")
+	dni = frappe.qb.DocType("Delivery Note Item")
+	verified_qty = Coalesce(Sum(dni.stock_qty), 0)
+	query = (
+		frappe.qb.from_(si)
+		.inner_join(sit)
+		.on(sit.parent == si.name)
+		.inner_join(item)
+		.on((item.name == sit.item_code) & (item.is_stock_item == 1))
+		.left_join(dni)
+		.on((dni.si_detail == sit.name) & (dni.docstatus < 2))
+		.select(
+			sit.stock_qty,
+			sit.delivered_qty,
+			verified_qty.as_("DNI_sum_stock_qty"),
+			si.name.as_("name"),
+			si.posting_date.as_("posting_date"),
+			si.customer.as_("customer"),
+			RowNumber().over(si.name).orderby(si.name).as_("RN"),
+		)
+		.where(si.docstatus == 1)
+		.where(si.update_stock != 1)
+		.where(sit.stock_qty != sit.delivered_qty)
+		.groupby(si.name, sit.name)
+		.having(sit.stock_qty > verified_qty)
+	)
+	if automatic:
+		query = query.select(
+			si.company.as_("company"),
+			si.enabled_auto_create_delivery_notes.as_("enabled_auto_create_delivery_notes"),
+		)
+		query = query.where(si.enabled_auto_create_delivery_notes == 1)
 	else:
-		return 0
+		query = query.select(sit.warehouse.as_("set_warehouse"))
+		query = query.where(si.is_return == 0).where(
+			si.status.notin(("Credit Note Issued", "Internal Transfer"))
+		)
+	return query, si, sit
 
 
 @frappe.whitelist()
 def get_pending_sales_invoice(*args):
 	frappe.has_permission("Sales Invoice", throw=True)
-	filters = args[5]
-	start = cint(args[3])
-	page_length = cint(args[4])
-	conditions = ""
-	if args[1] != "":
-		conditions += f" AND SI.name = '{args[1]}'"
+	filters = args[5] or {}
+	start = max(cint(args[3]), 0)
+	page_length = max(cint(args[4]), 0)
+	query, si, sit = _pending_delivery_note_items_query()
+	if args[1]:
+		query = query.where(si.name == args[1])
 	if "posting_date" in filters:
-		posting_date = filters["posting_date"]
-		from_date = f"'{posting_date[1][0]}'"
-		to_date = f"'{posting_date[1][1]}'"
-		conditions += f"AND DATE(SI.posting_date) BETWEEN {from_date} AND {to_date}"
+		date_range = filters["posting_date"][1]
+		query = query.where(si.posting_date.between(date_range[0], date_range[1]))
 	if "customer" in filters:
-		conditions += " AND SI.customer = '{}'".format(filters["customer"])
+		query = query.where(si.customer == filters["customer"])
 	if "company" in filters:
-		conditions += " AND SI.company = '{}'".format(filters["company"])
+		query = query.where(si.company == filters["company"])
 	if "set_warehouse" in filters:
-		conditions += " AND SIT.warehouse = '{}'".format(filters["set_warehouse"])
-	query = f"""
-            WITH CTE AS(
-                SELECT
-                    SIT.stock_qty,
-                    SIT.delivered_qty,
-                    SIT.warehouse AS set_warehouse,
-                    COALESCE (SUM(DNI.stock_qty), 0) As DNI_sum_stock_qty,
-                    SI.name AS name,
-                    SI.posting_date AS posting_date,
-                    SI.customer As customer,
-                    ROW_NUMBER()OVER(PARTITION BY SI.name ORDER BY SI.name) AS RN
-                FROM `tabSales Invoice` AS SI
-                    INNER JOIN `tabSales Invoice Item` AS SIT ON SIT.parent = SI.name
-                    INNER JOIN `tabItem` AS IT ON IT.name = SIT.item_code and IT.is_stock_item = 1
-                    LEFT OUTER JOIN `tabDelivery Note Item` as DNI on DNI.si_detail = SIT.name AND DNI.docstatus < 2
-                WHERE
-                    SIT.parent = SI.name
-                    AND SI.docstatus= 1
-                    AND SI.update_stock != 1
-                    AND SI.is_return = 0
-                    AND SI.status NOT IN ("Credit Note Issued", "Internal Transfer")
-                    AND SIT.stock_qty != SIT.delivered_qty
-                    {conditions}
-                GROUP BY SI.name, SIT.name
-                HAVING SIT.stock_qty > DNI_sum_stock_qty
-            )
-            SELECT * FROM `CTE` WHERE RN = 1
-            LIMIT {page_length}
-            OFFSET {start}
-            """
-	data = frappe.db.sql(query, as_dict=True)
-	return data
+		query = query.where(sit.warehouse == filters["set_warehouse"])
+	filtered = query.as_("pending")
+	return (
+		frappe.qb.from_(filtered)
+		.select(filtered.star)
+		.where(filtered.RN == 1)
+		.limit(page_length)
+		.offset(start)
+		.run(as_dict=True)
+	)
 
 
 def get_list_pending_sales_invoice(invoice_name=None, warehouse=None):
-	conditions = ""
+	query, si, sit = _pending_delivery_note_items_query(automatic=True)
 	if invoice_name:
-		conditions += f" AND SI.name = '{invoice_name}'"
+		query = query.where(si.name == invoice_name)
 	if warehouse:
-		conditions += f" AND SIT.warehouse = '{warehouse}'"
-	query = f"""
-            WITH CTE AS(
-                SELECT
-                    SIT.stock_qty,
-                    SIT.delivered_qty,
-                    COALESCE (SUM(DNI.stock_qty), 0) As DNI_sum_stock_qty,
-                    SI.name AS name,
-                    SI.posting_date AS posting_date,
-                    SI.customer As customer,
-                    SI.company As company,
-                    SI.enabled_auto_create_delivery_notes as enabled_auto_create_delivery_notes,
-                    ROW_NUMBER()OVER(PARTITION BY SI.name ORDER BY SI.name) AS RN
-                FROM `tabSales Invoice` AS SI
-                    INNER JOIN `tabSales Invoice Item` AS SIT ON SIT.parent = SI.name
-                    INNER JOIN `tabItem` AS IT ON IT.name = SIT.item_code and IT.is_stock_item = 1
-                    LEFT OUTER JOIN `tabDelivery Note Item` as DNI on DNI.si_detail = SIT.name AND DNI.docstatus < 2
-                WHERE
-                    SIT.parent = SI.name
-                    AND SI.docstatus= 1
-                    AND SI.update_stock != 1
-                    AND SIT.stock_qty != SIT.delivered_qty
-                    AND SI.enabled_auto_create_delivery_notes = 1
-                    {conditions}
-                GROUP BY SI.name, SIT.name
-                HAVING SIT.stock_qty > DNI_sum_stock_qty
-            )
-            SELECT * FROM `CTE` WHERE RN = 1
-            """
-	data = frappe.db.sql(query, as_dict=True)
-	return data
+		query = query.where(sit.warehouse == warehouse)
+	filtered = query.as_("pending")
+	return frappe.qb.from_(filtered).select(filtered.star).where(filtered.RN == 1).run(as_dict=True)
 
 
 def create_delivery_note_for_all_pending_sales_invoice(doc=None, method=None):

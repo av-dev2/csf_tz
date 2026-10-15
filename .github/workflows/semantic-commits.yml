@@ -21,10 +21,13 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          check-latest: true
+          node-version: 22
 
       - name: Check commit messages
         run: |
-          npm install @commitlint/cli @commitlint/config-conventional conventional-changelog-conventionalcommits
-          npx commitlint --verbose --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
+          # Run commitlint outside the application directory so unrelated package
+          # dependencies and lockfiles cannot break commit-message checks.
+          mkdir -p "$RUNNER_TEMP/csf-commitlint"
+          cd "$RUNNER_TEMP/csf-commitlint"
+          npm install --no-save --no-package-lock @commitlint/cli@19 @commitlint/config-conventional@19
+          "$RUNNER_TEMP/csf-commitlint/node_modules/.bin/commitlint" --cwd "$GITHUB_WORKSPACE" --verbose --from "${{ github.event.pull_request.base.sha }}" --to "${{ github.event.pull_request.head.sha }}"

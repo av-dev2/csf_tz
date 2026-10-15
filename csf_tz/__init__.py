@@ -25,6 +25,10 @@ def load_monkey_patches():
 	if not getattr(frappe.local, "site", None):
 		return
 
+	conf = getattr(frappe.local, "conf", None)
+	if not conf or not conf.get("db_name"):
+		return
+
 	if app_name not in frappe.get_installed_apps():
 		return
 

@@ -568,9 +568,12 @@ def _pending_delivery_note_items_query(automatic=False):
 	verified_qty = Coalesce(Sum(dni.stock_qty), 0)
 	query = (
 		frappe.qb.from_(si)
-		.inner_join(sit).on(sit.parent == si.name)
-		.inner_join(item).on((item.name == sit.item_code) & (item.is_stock_item == 1))
-		.left_join(dni).on((dni.si_detail == sit.name) & (dni.docstatus < 2))
+		.inner_join(sit)
+		.on(sit.parent == si.name)
+		.inner_join(item)
+		.on((item.name == sit.item_code) & (item.is_stock_item == 1))
+		.left_join(dni)
+		.on((dni.si_detail == sit.name) & (dni.docstatus < 2))
 		.select(
 			sit.stock_qty,
 			sit.delivered_qty,
@@ -587,11 +590,16 @@ def _pending_delivery_note_items_query(automatic=False):
 		.having(sit.stock_qty > verified_qty)
 	)
 	if automatic:
-		query = query.select(si.company.as_("company"), si.enabled_auto_create_delivery_notes.as_("enabled_auto_create_delivery_notes"))
+		query = query.select(
+			si.company.as_("company"),
+			si.enabled_auto_create_delivery_notes.as_("enabled_auto_create_delivery_notes"),
+		)
 		query = query.where(si.enabled_auto_create_delivery_notes == 1)
 	else:
 		query = query.select(sit.warehouse.as_("set_warehouse"))
-		query = query.where(si.is_return == 0).where(si.status.notin(("Credit Note Issued", "Internal Transfer")))
+		query = query.where(si.is_return == 0).where(
+			si.status.notin(("Credit Note Issued", "Internal Transfer"))
+		)
 	return query, si, sit
 
 
@@ -631,12 +639,7 @@ def get_list_pending_sales_invoice(invoice_name=None, warehouse=None):
 	if warehouse:
 		query = query.where(sit.warehouse == warehouse)
 	filtered = query.as_("pending")
-	return (
-		frappe.qb.from_(filtered)
-		.select(filtered.star)
-		.where(filtered.RN == 1)
-		.run(as_dict=True)
-	)
+	return frappe.qb.from_(filtered).select(filtered.star).where(filtered.RN == 1).run(as_dict=True)
 
 
 def create_delivery_note_for_all_pending_sales_invoice(doc=None, method=None):

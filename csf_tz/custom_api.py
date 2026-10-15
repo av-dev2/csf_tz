@@ -542,15 +542,15 @@ def update_delivery_on_sales_invoice(doc, method):
 
 
 def get_delivery_note_item_count(item_row_name, sales_invoice):
-	query = f""" SELECT SUM(stock_qty) as cont
+	query = """ SELECT SUM(stock_qty) as cont
             FROM `tabDelivery Note Item`
             WHERE
-                si_detail = '{item_row_name}'
+                si_detail = %s
                 AND docstatus != 2
-                AND against_sales_invoice = '{sales_invoice}'
+                AND against_sales_invoice = %s
             """
 
-	counts = frappe.db.sql(query, as_dict=True)
+	counts = frappe.db.sql(query, (item_row_name, sales_invoice), as_dict=True)
 	if len(counts) > 0 and counts[0]["cont"]:
 		return float(counts[0]["cont"])
 	else:
@@ -564,19 +564,23 @@ def get_pending_sales_invoice(*args):
 	start = cint(args[3])
 	page_length = cint(args[4])
 	conditions = ""
+	params = []
 	if args[1] != "":
-		conditions += f" AND SI.name = '{args[1]}'"
+		conditions += " AND SI.name = %s"
+		params.append(args[1])
 	if "posting_date" in filters:
 		posting_date = filters["posting_date"]
-		from_date = f"'{posting_date[1][0]}'"
-		to_date = f"'{posting_date[1][1]}'"
-		conditions += f"AND DATE(SI.posting_date) BETWEEN {from_date} AND {to_date}"
+		conditions += " AND DATE(SI.posting_date) BETWEEN %s AND %s"
+		params.extend((posting_date[1][0], posting_date[1][1]))
 	if "customer" in filters:
-		conditions += " AND SI.customer = '{}'".format(filters["customer"])
+		conditions += " AND SI.customer = %s"
+		params.append(filters["customer"])
 	if "company" in filters:
-		conditions += " AND SI.company = '{}'".format(filters["company"])
+		conditions += " AND SI.company = %s"
+		params.append(filters["company"])
 	if "set_warehouse" in filters:
-		conditions += " AND SIT.warehouse = '{}'".format(filters["set_warehouse"])
+		conditions += " AND SIT.warehouse = %s"
+		params.append(filters["set_warehouse"])
 	query = f"""
             WITH CTE AS(
                 SELECT
@@ -604,19 +608,23 @@ def get_pending_sales_invoice(*args):
                 HAVING SIT.stock_qty > DNI_sum_stock_qty
             )
             SELECT * FROM `CTE` WHERE RN = 1
-            LIMIT {page_length}
-            OFFSET {start}
+            LIMIT %s
+            OFFSET %s
             """
-	data = frappe.db.sql(query, as_dict=True)
+	params.extend((max(page_length, 0), max(start, 0)))
+	data = frappe.db.sql(query, tuple(params), as_dict=True)
 	return data
 
 
 def get_list_pending_sales_invoice(invoice_name=None, warehouse=None):
 	conditions = ""
+	params = []
 	if invoice_name:
-		conditions += f" AND SI.name = '{invoice_name}'"
+		conditions += " AND SI.name = %s"
+		params.append(invoice_name)
 	if warehouse:
-		conditions += f" AND SIT.warehouse = '{warehouse}'"
+		conditions += " AND SIT.warehouse = %s"
+		params.append(warehouse)
 	query = f"""
             WITH CTE AS(
                 SELECT
@@ -645,7 +653,7 @@ def get_list_pending_sales_invoice(invoice_name=None, warehouse=None):
             )
             SELECT * FROM `CTE` WHERE RN = 1
             """
-	data = frappe.db.sql(query, as_dict=True)
+	data = frappe.db.sql(query, tuple(params), as_dict=True)
 	return data
 
 
